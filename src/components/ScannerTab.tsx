@@ -19,7 +19,13 @@ export default function ScannerTab() {
 
   useEffect(() => {
     if (scanState === 'SCANNING_SN') {
-      const scanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: {width: 250, height: 250} }, false);
+      const isMobile = window.innerWidth < 600;
+      const scanner = new Html5QrcodeScanner("reader", { 
+        fps: 10, 
+        qrbox: isMobile ? 200 : 250,
+        aspectRatio: 1.0
+      }, false);
+      
       scanner.render((decodedText) => {
         setScannedSerial(decodedText);
         const student = students.find(s => s.serialNumber === decodedText);
@@ -162,7 +168,7 @@ export default function ScannerTab() {
       {scanState === 'SCANNING_SN' && (
         <div className="space-y-4 flex flex-col items-center">
           <h3 className="text-lg font-medium">امسح باركود الطالب</h3>
-          <div id="reader" className="w-full max-w-sm bg-black rounded-xl overflow-hidden border border-slate-700"></div>
+          <div id="reader" className="w-full max-w-sm bg-slate-900 rounded-xl overflow-hidden border border-slate-700 text-white p-2"></div>
           <button onClick={() => setScanState('IDLE')} className="text-slate-400 hover:text-white pb-safe">إلغاء</button>
         </div>
       )}

@@ -1,7 +1,10 @@
 import { useState, useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
-import { Users, FileText, CheckCircle, AlertTriangle, Filter } from 'lucide-react';
+import { Users, FileText, CheckCircle, AlertTriangle, Filter, Download, BarChart2 } from 'lucide-react';
+import * as XLSX from 'xlsx';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
+import toast from 'react-hot-toast';
 
 export default function Dashboard() {
   const students = useLiveQuery(() => db.students.toArray()) || [];
@@ -46,9 +49,85 @@ export default function Dashboard() {
     }
   };
 
+  const exportToExcel = () => {
+    if (filteredResults.length === 0) {
+      toast.error('لا توجد بيانات لتصديرها');
+      return;
+    }
+    
+    const data = filteredResults.map(r => {
+      const st = students.find(s => s.id === r.studentId);
+      const ex = exams.find(e => e.id === r.examId);
+      const cl = classes.find(c => c.id === st?.classId);
+      return {
+        'الطالب': st?.name || 'غير معروف',
+        'الرقم التسلسلي': st?.serialNumber || '-',
+        'الصف': cl?.name || '-',
+        'الامتحان': ex?.title || '-',
+        'المادة': ex?.subject || '-',
+        'الدرجة': r.score,
+        'النسبة المئوية (%)': r.percentage,
+        'الحالة': getCategoryLabel(r.category),
+        'اشتباه غش': r.isCheatSuspected ? 'نعم' : 'لا'
+      };
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Results");
+    XLSX.writeFile(workbook, `إحصائيات_الامتحانات_${new Date().toLocaleDateString()}.xlsx`);
+    toast.success('تم تصدير التقرير بنجاح');
+  };
+
+  // Chart Data Preparation
+  const pieData = useMemo(() => {
+    const counts = { Perfect: 0, Pass: 0, Fail: 0 };
+    filteredResults.forEach(r => {
+      if (counts[r.category as keyof typeof counts] !== undefined) {
+        counts[r.category as keyof typeof counts]++;
+      }
+    });
+    return [
+      { name: 'علامة كاملة', value: counts.Perfect, color: '#a855f7' },
+      { name: 'ناجح', value: counts.Pass, color: '#10b981' },
+      { name: 'راسب', value: counts.Fail, color: '#ef4444' }
+    ].filter(d => d.value > 0);
+  }, [filteredResults]);
+
+  const barData = useMemo(() => {
+    if (selectedExamId !== 0) {
+      // Show distribution of scores for the exam
+      const bins = {'0-20%':0, '21-40%':0, '41-60%':0, '61-80%':0, '81-100%':0};
+      filteredResults.forEach(r => {
+        if(r.percentage <= 20) bins['0-20%']++;
+        else if (r.percentage <= 40) bins['21-40%']++;
+        else if (r.percentage <= 60) bins['41-60%']++;
+        else if (r.percentage <= 80) bins['61-80%']++;
+        else bins['81-100%']++;
+      });
+      return Object.entries(bins).map(([name, count]) => ({ name, count }));
+    }
+    // Show top exams average
+    const examAverages: Record<number, { sum: number, count: number }> = {};
+    filteredResults.forEach(r => {
+      if(!examAverages[r.examId]) examAverages[r.examId] = { sum:0, count:0 };
+      examAverages[r.examId].sum += r.percentage;
+      examAverages[r.examId].count++;
+    });
+    return Object.entries(examAverages).slice(0, 5).map(([eId, d]) => {
+      const ex = exams.find(e => e.id === Number(eId));
+      return { name: ex?.title?.substring(0, 10) + '..' || 'Unknown', count: Math.round(d.sum / d.count) };
+    });
+  }, [filteredResults, exams, selectedExamId]);
+
   return (
     <div className="space-y-6 pb-20">
-      <h2 className="text-2xl font-semibold border-b border-slate-700 pb-4">الإحصائيات العامة</h2>
+      <div className="flex justify-between items-center border-b border-slate-700 pb-4">
+        <h2 className="text-2xl font-semibold">الإحصائيات والتقارير</h2>
+        <button onClick={exportToExcel} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 space-x-reverse transition-colors">
+          <Download size={18} /> <span className="hidden sm:inline">تصدير (Excel)</span>
+        </button>
+      </div>
       
       {/* Top Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -74,10 +153,50 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* Charts Section */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700">
+           <h3 className="text-slate-300 font-medium mb-4 flex items-center gap-2"><BarChart2 size={18}/> توزيع النتائج</h3>
+           {barData.length > 0 ? (
+             <div className="h-64 w-full" dir="ltr">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={barData}>
+                    <XAxis dataKey="name" stroke="#94a3b8" fontSize={12} />
+                    <YAxis stroke="#94a3b8" fontSize={12} />
+                    <Tooltip cursor={{fill: '#334155'}} contentStyle={{backgroundColor: '#1e293b', border: 'none', borderRadius: '8px', color: '#fff'}} />
+                    <Bar dataKey="count" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+             </div>
+           ) : (
+             <div className="h-64 flex items-center justify-center text-slate-500">لا توجد بيانات كافية</div>
+           )}
+        </div>
+        <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700">
+           <h3 className="text-slate-300 font-medium mb-4">نسب النجاح والفشل</h3>
+           {pieData.length > 0 ? (
+              <div className="h-64 w-full" dir="ltr">
+                 <ResponsiveContainer width="100%" height="100%">
+                   <PieChart>
+                     <Tooltip contentStyle={{backgroundColor: '#1e293b', border: 'none', borderRadius: '8px', color: '#fff'}} />
+                     <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5}>
+                       {pieData.map((entry, index) => (
+                         <Cell key={`cell-${index}`} fill={entry.color} />
+                       ))}
+                     </Pie>
+                   </PieChart>
+                 </ResponsiveContainer>
+              </div>
+           ) : (
+             <div className="h-64 flex items-center justify-center text-slate-500">لا توجد بيانات كافية</div>
+           )}
+        </div>
+      </div>
+
       {/* Filters */}
       <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700 space-y-4">
         <div className="flex items-center space-x-2 space-x-reverse text-slate-300 font-medium pb-2 border-b border-slate-700">
-           <Filter size={18} /> <span>فلاتر متقدمة</span>
+           <Filter size={18} /> <span>فلاتر متقدمة للسجلات</span>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <select value={selectedClassId} onChange={e=>setSelectedClassId(Number(e.target.value))} className="bg-slate-900 border border-slate-600 rounded-lg p-3 text-white outline-none">

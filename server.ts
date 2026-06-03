@@ -48,7 +48,12 @@ async function startServer() {
 
       if (!response.text) throw new Error("No text returned from Gemini");
       
-      const json = JSON.parse(response.text);
+      let rawText = response.text.trim();
+      if (rawText.startsWith('```')) {
+         rawText = rawText.replace(/^```json\s*/, '').replace(/^```\s*/, '').replace(/\s*```$/, '');
+      }
+      
+      const json = JSON.parse(rawText);
       res.json(json);
     } catch (error: any) {
       console.error("AI Generation Error:", error);

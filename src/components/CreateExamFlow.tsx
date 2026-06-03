@@ -43,6 +43,11 @@ export default function CreateExamFlow({ onCancel, onComplete }: { onCancel: () 
   };
 
   const handleGenerate = async () => {
+    if (!navigator.onLine) {
+      toast.error('أنت غير متصل بالإنترنت. يرجى الاتصال بالإنترنت لتوليد الامتحان.');
+      return;
+    }
+    
     if (!title || classId === 0 || !subject || (!contentBlock && files.length === 0)) {
       toast.error('الرجاء ملء جميع الحقول المطلوبة (يجب تقديم محتوى نصي أو ملف)');
       setErrorMsg('الرجاء ملء جميع الحقول المطلوبة (يجب تقديم محتوى نصي أو ملف)');
