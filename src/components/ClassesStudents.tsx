@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
 import { Plus, Trash2, Edit2 } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 export default function ClassesStudents() {
   const classes = useLiveQuery(() => db.classes.toArray()) || [];
@@ -15,27 +16,41 @@ export default function ClassesStudents() {
   const [newStudentClassId, setNewStudentClassId] = useState<number>(0);
 
   const addClass = async () => {
-    if (!newClassName || !newClassSubj) return;
+    if (!newClassName || !newClassSubj) {
+      toast.error('الرجاء تعبئة جميع الحقول');
+      return;
+    }
     await db.classes.add({ name: newClassName, subject: newClassSubj });
     setNewClassName(''); setNewClassSubj('');
+    toast.success('تمت إضافة الصف بنجاح');
   };
 
   const addStudent = async () => {
-    if (!newStudentName || !newStudentSerial || newStudentClassId === 0) return;
+    if (!newStudentName || !newStudentSerial || newStudentClassId === 0) {
+      toast.error('الرجاء تعبئة جميع الحقول');
+      return;
+    }
     await db.students.add({ name: newStudentName, serialNumber: newStudentSerial, classId: newStudentClassId });
     setNewStudentName(''); setNewStudentSerial('');
+    toast.success('تمت إضافة الطالب بنجاح');
   };
 
   const deleteClass = async (id: number) => {
-    await db.classes.delete(id);
-    const relatedStudents = await db.students.where('classId').equals(id).toArray();
-    for (const s of relatedStudents) {
-      if (s.id) await db.students.delete(s.id);
+    if (confirm('هل أنت متأكد من حذف هذا الصف وجميع الطلاب المرتبطين به؟')) {
+      await db.classes.delete(id);
+      const relatedStudents = await db.students.where('classId').equals(id).toArray();
+      for (const s of relatedStudents) {
+        if (s.id) await db.students.delete(s.id);
+      }
+      toast.success('تم حذف الصف بنجاح');
     }
   };
 
   const deleteStudent = async (id: number) => {
-    await db.students.delete(id);
+    if (confirm('هل أنت متأكد من حذف هذا الطالب؟')) {
+      await db.students.delete(id);
+      toast.success('تم حذف الطالب بنجاح');
+    }
   };
 
   return (

@@ -3,6 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
 import { Save, Download, Upload, Shield } from 'lucide-react';
 import { exportDB, importInto } from 'dexie-export-import';
+import toast from 'react-hot-toast';
 
 export default function SettingsTab() {
   const settings = useLiveQuery(() => db.settings.get(1));
@@ -30,11 +31,11 @@ export default function SettingsTab() {
       if (newPassword.length >= 4) {
         await db.settings.update(settings.id, { userPasswordHash: newPassword });
         setNewPassword('');
-        alert('تم تحديث كلمة المرور!');
+        toast.success('تم تحديث كلمة المرور وحفظ الإعدادات!');
       } else if (newPassword.length > 0) {
-        alert('كلمة المرور يجب أن لا تقل عن 4 أحرف');
+        toast.error('كلمة المرور يجب أن لا تقل عن 4 أحرف');
       } else {
-        alert('تم حفظ الإعدادات!');
+        toast.success('تم حفظ الإعدادات بنجاح!');
       }
     }
   };
@@ -47,8 +48,9 @@ export default function SettingsTab() {
       a.href = url;
       a.download = `NexusEdu_Backup_${new Date().toISOString().split('T')[0]}.json`;
       a.click();
+      toast.success('تم تصدير النسخة الاحتياطية بنجاح.');
     } catch (e) {
-      alert('فشل التصدير: ' + e);
+      toast.error('فشل التصدير: ' + e);
     }
   };
 
@@ -59,10 +61,10 @@ export default function SettingsTab() {
       await db.delete();
       await db.open(); // recreation
       await importInto(db, file);
-      alert('تمت استعادة قاعدة البيانات بنجاح! جاري إعادة التحميل...');
-      window.location.reload();
+      toast.success('تمت استعادة قاعدة البيانات بنجاح! جاري إعادة التحميل...');
+      setTimeout(() => window.location.reload(), 1500);
     } catch (err) {
-      alert('فشل الاستيراد: ' + err);
+      toast.error('فشل الاستيراد: ' + err);
     }
   };
 

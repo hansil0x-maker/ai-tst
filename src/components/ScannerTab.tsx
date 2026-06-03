@@ -3,6 +3,7 @@ import { Html5QrcodeScanner } from 'html5-qrcode';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
 import { ScanLine, CheckCircle2, UserCircle, Calculator, AlertTriangle } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 export default function ScannerTab() {
   const exams = useLiveQuery(() => db.exams.toArray()) || [];
@@ -23,6 +24,7 @@ export default function ScannerTab() {
         setScannedSerial(decodedText);
         const student = students.find(s => s.serialNumber === decodedText);
         if (student) {
+          toast.success(`تم العثور على الطالب: ${student.name}`);
           setCurrentStudent(student);
           scanner.clear();
           if (selectedExamId !== 0) {
@@ -31,7 +33,7 @@ export default function ScannerTab() {
             setScanState('RESULT');
           }
         } else {
-          alert('لم يتم العثور على الرقم التسلسلي للطالب في قاعدة البيانات!');
+          toast.error('لم يتم العثور على الرقم التسلسلي أو QR للطالب في قاعدة البيانات!');
         }
       }, (error) => { /* ignore generic errors */ });
 

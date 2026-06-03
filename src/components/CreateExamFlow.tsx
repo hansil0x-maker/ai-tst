@@ -3,6 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
 import { ArrowLeft, Loader2, Sparkles, Check, CheckSquare, UploadCloud, X } from 'lucide-react';
 import type { Question } from '../types';
+import toast from 'react-hot-toast';
 
 export default function CreateExamFlow({ onCancel, onComplete }: { onCancel: () => void, onComplete: () => void }) {
   const classes = useLiveQuery(() => db.classes.toArray()) || [];
@@ -43,11 +44,13 @@ export default function CreateExamFlow({ onCancel, onComplete }: { onCancel: () 
 
   const handleGenerate = async () => {
     if (!title || classId === 0 || !subject || (!contentBlock && files.length === 0)) {
+      toast.error('الرجاء ملء جميع الحقول المطلوبة (يجب تقديم محتوى نصي أو ملف)');
       setErrorMsg('الرجاء ملء جميع الحقول المطلوبة (يجب تقديم محتوى نصي أو ملف)');
       return;
     }
     setErrorMsg('');
     setIsGenerating(true);
+    toast.loading('جاري توليد الامتحان عبر الذكاء الاصطناعي...', { id: 'generate' });
     try {
       const res = await fetch('/api/generate-exam', {
         method: 'POST',
@@ -60,11 +63,13 @@ export default function CreateExamFlow({ onCancel, onComplete }: { onCancel: () 
       if (data.questions && Array.isArray(data.questions)) {
         setGeneratedQuestions(data.questions);
         setStep(2);
+        toast.success('تم التوليد بنجاح', { id: 'generate' });
       } else {
         throw new Error('تنسيق JSON غير صالح من الذكاء الاصطناعي.');
       }
     } catch (error: any) {
       setErrorMsg(error.message);
+      toast.error(error.message, { id: 'generate' });
     } finally {
       setIsGenerating(false);
     }
@@ -88,6 +93,7 @@ export default function CreateExamFlow({ onCancel, onComplete }: { onCancel: () 
       status: 'Pending'
     });
     
+    toast.success('تم اعتماد وحفظ الامتحان!');
     onComplete();
   };
 
