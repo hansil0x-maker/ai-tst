@@ -53,7 +53,14 @@ async function startServer() {
          rawText = rawText.replace(/^```json\s*/, '').replace(/^```\s*/, '').replace(/\s*```$/, '');
       }
       
-      const json = JSON.parse(rawText);
+      let json;
+      try {
+        json = JSON.parse(rawText);
+      } catch (parseErr) {
+        console.error("Failed to parse Gemini output:", parseErr, "\\nRAW OUTPUT:", rawText);
+        throw new Error("تنسيق JSON غير صالح من الذكاء الاصطناعي. الرجاء المحاولة مرة أخرى.");
+      }
+      
       res.json(json);
     } catch (error: any) {
       console.error("AI Generation Error:", error);

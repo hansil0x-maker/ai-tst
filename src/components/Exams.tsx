@@ -3,8 +3,6 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
 import { Plus, Trash2, FileText, Printer } from 'lucide-react';
 import CreateExamFlow from './CreateExamFlow';
-import jsPDF from 'jspdf';
-import 'jspdf-autotable';
 
 export default function Exams() {
   const [isCreating, setIsCreating] = useState(false);
@@ -33,57 +31,116 @@ export default function Exams() {
       return;
     }
 
-    const doc = new jsPDF({ format: 'a4', unit: 'mm' });
-    
+    const printWindow = document.createElement('iframe');
+    printWindow.style.position = 'absolute';
+    printWindow.style.top = '-10000px';
+    document.body.appendChild(printWindow);
+
+    const doc = printWindow.contentWindow?.document;
+    if (!doc) return;
+
+    doc.open();
+    doc.write(`
+      <html dir="rtl" lang="ar">
+        <head>
+          <title>طباعة الامتحان</title>
+          <style>
+            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; }
+            .page { width: 210mm; min-height: 297mm; padding: 20mm; margin: 0 auto; box-sizing: border-box; page-break-after: always; position: relative; }
+            .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
+            .school-name { font-size: 24px; font-weight: bold; }
+            .year { font-size: 14px; color: #555; }
+            .meta { display: flex; justify-content: space-between; margin-bottom: 20px; font-size: 14px; }
+            .meta div { flex: 1; }
+            .qr-box { width: 80px; height: 80px; border: 2px dashed #000; display: flex; align-items: center; justify-content: center; font-size: 10px; flex-shrink: 0; margin-right: 20px; }
+            .content-row { display: flex; align-items: flex-start; justify-content: space-between; }
+            .questions { margin-top: 20px; }
+            .question { margin-bottom: 25px; display: flex; align-items: flex-start; justify-content: space-between; }
+            .q-text { flex: 1; margin-left: 20px; font-size: 14px; line-height: 1.5; }
+            .options { display: flex; gap: 15px; direction: ltr; }
+            .bubble { width: 20px; height: 20px; border: 1px solid #000; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; }
+            @media print {
+              body { background: #fff; }
+              .page { margin: 0; padding: 15mm; border: none; }
+            }
+          </style>
+        </head>
+        <body>
+    `);
+
     for (let i = 0; i < classStudents.length; i++) {
-        if (i > 0) doc.addPage();
         const student = classStudents[i];
-        
-        doc.setFontSize(16);
-        doc.text(settings.schoolName || 'School Name', 105, 20, { align: 'center' });
-        doc.setFontSize(12);
-        doc.text(`Academic Year: ${settings.academicYear || ''}`, 105, 27, { align: 'center' });
-        
-        doc.setLineWidth(0.5);
-        doc.line(20, 32, 190, 32);
+        doc.write(`
+          <div class="page">
+            <div class="header">
+              <div class="school-name">${settings.schoolName || 'اسم المدرسة'}</div>
+              <div class="year">العام الدراسي: ${settings.academicYear || ''}</div>
+            </div>
+            <div class="content-row">
+              <div class="meta">
+                <div>
+                  <p><strong>الطالب:</strong> ${student.name}</p>
+                  <p><strong>الصف:</strong> ${examClass.name}</p>
+                  <p><strong>الرقم التسلسلي:</strong> ${student.serialNumber}</p>
+                </div>
+                <div>
+                  <p><strong>الامتحان:</strong> ${exam.title}</p>
+                  <p><strong>المادة:</strong> ${exam.subject}</p>
+                  <p><strong>التاريخ:</strong> ${new Date(exam.date).toLocaleDateString('ar-EG')}</p>
+                </div>
+              </div>
+              <div class="qr-box">
+                <img src="https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent(student.serialNumber)}" alt="QR" width="80" height="80"/>
+              </div>
+            </div>
+            
+            <hr style="margin: 20px 0; border: 0; border-bottom: 1px solid #000;" />
+            
+            <div class="questions">
+        `);
 
-        doc.setFontSize(11);
-        doc.text(`Exam: ${exam.title}`, 20, 42);
-        doc.text(`Subject: ${exam.subject}`, 20, 49);
-        doc.text(`Date: ${new Date(exam.date).toLocaleDateString()}`, 20, 56);
-        
-        doc.text(`Student: ${student.name}`, 120, 42);
-        doc.text(`Class: ${examClass.name}`, 120, 49);
-        doc.text(`Serial: ${student.serialNumber}`, 120, 56);
-        
-        doc.setLineWidth(1);
-        doc.rect(170, 40, 20, 20);
-        doc.setFontSize(8);
-        doc.text('CODE HERE', 172, 50);
-
-        doc.setLineWidth(0.5);
-        doc.line(20, 62, 190, 62);
-
-        doc.setFontSize(10);
-        let y = 70;
-        const qList = exam.questions;
-        for (let qInfo of qList) {
-          if (y > 270) {
-            doc.addPage();
-            y = 20;
-          }
-          doc.text(`${qInfo.id}. ${qInfo.text}`, 20, y, { maxWidth: 120 });
-          
-          doc.circle(150, y-1, 2); doc.text('A', 149, y);
-          doc.circle(160, y-1, 2); doc.text('B', 159, y);
-          doc.circle(170, y-1, 2); doc.text('C', 169, y);
-          doc.circle(180, y-1, 2); doc.text('D', 179, y);
-          
-          y += 12;
+        for (let qInfo of exam.questions) {
+          doc.write(`
+              <div class="question">
+                <div class="q-text">
+                  <div style="font-weight: bold; margin-bottom: 10px;">${qInfo.id}. ${qInfo.text}</div>
+                  <div style="margin-right: 15px; font-size: 13px;">
+                    <div>أ) ${qInfo.options.A || ''}</div>
+                    <div>ب) ${qInfo.options.B || ''}</div>
+                    <div>ج) ${qInfo.options.C || ''}</div>
+                    <div>د) ${qInfo.options.D || ''}</div>
+                  </div>
+                </div>
+                <div class="options" style="margin-top: 15px;">
+                  <div class="bubble">A</div>
+                  <div class="bubble">B</div>
+                  <div class="bubble">C</div>
+                  <div class="bubble">D</div>
+                </div>
+              </div>
+          `);
         }
+
+        doc.write(`
+            </div>
+          </div>
+        `);
     }
-    
-    doc.save(`${exam.title.replace(/\s+/g, '_')}_Papers.pdf`);
+
+    doc.write(`
+        </body>
+      </html>
+    `);
+    doc.close();
+
+    // Wait for images (QR codes) to load
+    setTimeout(() => {
+      printWindow.contentWindow?.focus();
+      printWindow.contentWindow?.print();
+      setTimeout(() => {
+        document.body.removeChild(printWindow);
+      }, 1000);
+    }, 1500);
   };
 
   if (isCreating) return <CreateExamFlow onCancel={() => setIsCreating(false)} onComplete={() => setIsCreating(false)} />;
