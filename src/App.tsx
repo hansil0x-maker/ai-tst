@@ -12,7 +12,7 @@ import MainLayout from './components/MainLayout';
 import { registerSW } from 'virtual:pwa-register';
 
 export default function App() {
-  const [isUnlocked, setIsUnlocked] = useState(false);
+  const [role, setRole] = useState<'dashboard' | 'grader' | 'developer' | null>(null);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
   useEffect(() => {
@@ -38,10 +38,10 @@ export default function App() {
     };
   }, []);
 
-  if (!isUnlocked) {
+  if (!role) {
     return (
       <>
-        <LockScreen onUnlocked={() => setIsUnlocked(true)} />
+        <LockScreen onUnlocked={(r) => setRole(r)} />
         <Toaster position="top-center" toastOptions={{ style: { background: '#1e293b', color: '#f8fafc', border: '1px solid #334155' } }} />
       </>
     );
@@ -49,7 +49,7 @@ export default function App() {
 
   return (
     <>
-      <MainLayout onLock={() => setIsUnlocked(false)} />
+      <MainLayout role={role} onLock={() => setRole(null)} />
       <Toaster position="top-center" toastOptions={{ style: { background: '#1e293b', color: '#f8fafc', border: '1px solid #334155' } }} />
     </>
   );

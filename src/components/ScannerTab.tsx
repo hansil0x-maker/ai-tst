@@ -4,6 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
 import { ScanLine, CheckCircle2, UserCircle, Calculator, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { syncManager } from '../sync';
 
 export default function ScannerTab() {
   const exams = useLiveQuery(() => db.exams.toArray()) || [];
@@ -22,7 +23,7 @@ export default function ScannerTab() {
       const isMobile = window.innerWidth < 600;
       const scanner = new Html5QrcodeScanner("reader", { 
         fps: 10, 
-        qrbox: { width: isMobile ? 200 : 250, height: isMobile ? 200 : 250 },
+        qrbox: isMobile ? { width: 250, height: 250 } : { width: 300, height: 300 },
         aspectRatio: 1.0,
       }, false);
       
@@ -123,6 +124,9 @@ export default function ScannerTab() {
     } else {
        await db.results.add(newResult);
     }
+    
+    // Broadcast sync to dashboard
+    syncManager.sendResults([newResult]);
   };
 
   const resetScanner = () => {

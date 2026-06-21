@@ -83,9 +83,9 @@ export default function CreateExamFlow({ onCancel, onComplete }: { onCancel: () 
       return;
     }
     
-    if (!title || classId === 0 || !subject || (!contentBlock && files.length === 0)) {
-      toast.error('الرجاء ملء جميع الحقول المطلوبة (يجب تقديم محتوى نصي أو ملف)');
-      setErrorMsg('الرجاء ملء جميع الحقول المطلوبة (يجب تقديم محتوى نصي أو ملف)');
+    if (!contentBlock && files.length === 0 && !notes) {
+      toast.error('الرجاء توفير محتوى، خطة منهج، أو كتابة ملاحظات لتوليد الامتحان.');
+      setErrorMsg('الرجاء توفير محتوى، خطة منهج، أو كتابة ملاحظات لتوليد الامتحان.');
       return;
     }
     setErrorMsg('');
@@ -116,6 +116,12 @@ export default function CreateExamFlow({ onCancel, onComplete }: { onCancel: () 
   };
 
   const handleSaveExam = async () => {
+    if (!title || classId === 0 || !subject) {
+      toast.error('يرجى العودة والرجاء ملء بيانات الامتحان الأساسية (العنوان، المادة، الصف) قبل الحفظ.');
+      setStep(1);
+      return;
+    }
+
     const correctAnswers: Record<number, string> = {};
     generatedQuestions.forEach(q => {
       correctAnswers[q.id] = q.correctAnswer;
@@ -148,15 +154,15 @@ export default function CreateExamFlow({ onCancel, onComplete }: { onCancel: () 
         <div className="space-y-4 max-w-2xl">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm text-slate-400 mb-1">عنوان الامتحان *</label>
-              <input type="text" value={title} onChange={e=>setTitle(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none" />
+              <label className="block text-sm text-slate-400 mb-1">عنوان الامتحان</label>
+              <input type="text" value={title} onChange={e=>setTitle(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none" placeholder="اختبار الفصل الأول..." />
             </div>
             <div>
-              <label className="block text-sm text-slate-400 mb-1">المادة *</label>
-              <input type="text" value={subject} onChange={e=>setSubject(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none" />
+              <label className="block text-sm text-slate-400 mb-1">المادة</label>
+              <input type="text" value={subject} onChange={e=>setSubject(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none" placeholder="الرياضيات..." />
             </div>
             <div className="sm:col-span-2">
-              <label className="block text-sm text-slate-400 mb-1">الصف المستهدف *</label>
+              <label className="block text-sm text-slate-400 mb-1">الصف المستهدف</label>
               <select value={classId} onChange={e=>setClassId(Number(e.target.value))} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none">
                 <option value={0}>اختر الصف...</option>
                 {classes.map(c => <option key={c.id} value={c.id}>{c.name} ({c.subject})</option>)}
@@ -175,7 +181,7 @@ export default function CreateExamFlow({ onCancel, onComplete }: { onCancel: () 
                   <div className="flex items-center space-x-2 space-x-reverse">
                     <UploadCloud size={24} /> <span>اختر صور أو ملفات PDF</span>
                   </div>
-                  <input type="file" multiple accept="image/*,application/pdf" className="hidden" onChange={handleFileUpload} />
+                  <input type="file" multiple accept="image/*, .pdf" className="hidden" onChange={handleFileUpload} />
                </label>
                {files.length > 0 && (
                  <div className="flex flex-wrap gap-2">

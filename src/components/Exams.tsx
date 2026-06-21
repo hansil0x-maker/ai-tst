@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
-import { Plus, Trash2, FileText, Printer } from 'lucide-react';
+import { Plus, Trash2, FileText, Printer, Send } from 'lucide-react';
 import CreateExamFlow from './CreateExamFlow';
+import { syncManager } from '../sync';
 
 export default function Exams() {
   const [isCreating, setIsCreating] = useState(false);
@@ -41,8 +42,10 @@ export default function Exams() {
 
     doc.open();
     doc.write(`
+      <!DOCTYPE html>
       <html dir="rtl" lang="ar">
         <head>
+          <meta charset="UTF-8">
           <title>طباعة الامتحان</title>
           <style>
             body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; }
@@ -166,6 +169,9 @@ export default function Exams() {
               </p>
             </div>
             <div className="flex space-x-2 space-x-reverse w-full sm:w-auto">
+              <button onClick={() => syncManager.broadcastExam(exam)} className="flex-1 sm:flex-none justify-center flex items-center space-x-1 space-x-reverse bg-emerald-900 border border-emerald-600 hover:border-emerald-500 text-emerald-300 px-3 py-2 rounded-lg transition-colors">
+                <Send size={18} /> <span className="sm:hidden text-sm">إرسال للمصححين</span>
+              </button>
               <button onClick={() => handlePrintExam(exam)} className="flex-1 sm:flex-none justify-center flex items-center space-x-1 space-x-reverse bg-slate-900 border border-slate-600 hover:border-blue-500 text-slate-300 px-3 py-2 rounded-lg transition-colors">
                 <Printer size={18} /> <span className="sm:hidden text-sm">طباعة</span>
               </button>
