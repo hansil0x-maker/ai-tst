@@ -21,8 +21,8 @@ export default function ScannerTab() {
   const [isGrading, setIsGrading] = useState(false);
 
   const handleCapturePaper = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
     
     if (selectedExamId === 0) {
       toast.error('يجب اختيار الامتحان أولاً.');
@@ -34,56 +34,72 @@ export default function ScannerTab() {
 
     setIsGrading(true);
 
-    try {
-      // Convert image to base64
-      const reader = new FileReader();
-      reader.onload = async (ev) => {
-        const base64Url = ev.target?.result as string;
-        if (!base64Url) return;
-        const base64Data = base64Url.split(',')[1];
-        
-        // Prepare correct answers map for prompt context
-        const questionsKey = exam.questions.map((q: any) => ({
-          id: q.id,
-          correctAnswer: q.correctAnswer
-        }));
+    for (const file of files) {
+      try {
+        await new Promise<void>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = async (ev) => {
+            const base64Url = ev.target?.result as string;
+            if (!base64Url) { resolve(); return; }
+            const base64Data = base64Url.split(',')[1];
+            
+            const questionsKey = exam.questions.map((q: any) => ({
+              id: q.id,
+              correctAnswer: q.correctAnswer
+            }));
 
-        const res = await fetch('/api/grade-exam', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image: base64Data, questions: questionsKey })
+            try {
+              const res = await fetch('/api/grade-exam', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image: base64Data, questions: questionsKey })
+              });
+              
+              const data = await res.json();
+              
+              if (data.error) {
+                toast.error(data.error);
+                resolve();
+                return;
+              }
+
+              if (data.serialNumber && data.answers) {
+                const student = students.find(s => s.serialNumber === data.serialNumber);
+                if (student) {
+                  toast.success(`تم العثور على الطالب: ${student.name} وتم التصحيح.`);
+                  setCurrentStudent(student);
+                  setScannedSerial(data.serialNumber);
+                  setSimulatedAnswers(data.answers);
+                  await calculateAndSaveResult(exam, student, data.answers);
+                  // Only change state to RESULT if it's a single file or last file
+                  if (files.length === 1) {
+                    setScanState('RESULT');
+                  }
+                } else {
+                  toast.error(`لم يتم العثور على طالب بالرقم التسلسلي: ${data.serialNumber}`);
+                }
+              } else {
+                toast.error('حدث خطأ في التعرف على الإجابات أو الطالب');
+              }
+              resolve();
+            } catch (err) {
+              console.error(err);
+              toast.error('حدث خطأ أثناء الاتصال بالخادم');
+              resolve();
+            }
+          };
+          reader.readAsDataURL(file);
         });
-        
-        const data = await res.json();
-        
-        if (data.error) {
-          toast.error(data.error);
-          setIsGrading(false);
-          return;
-        }
-
-        if (data.serialNumber && data.answers) {
-          const student = students.find(s => s.serialNumber === data.serialNumber);
-          if (student) {
-            toast.success(`تم العثور على الطالب: ${student.name}`);
-            setCurrentStudent(student);
-            setScannedSerial(data.serialNumber);
-            setSimulatedAnswers(data.answers);
-            await calculateAndSaveResult(exam, student, data.answers);
-            setScanState('RESULT');
-          } else {
-            toast.error(`لم يتم العثور على طالب بالرقم التسلسلي: ${data.serialNumber}`);
-          }
-        } else {
-          toast.error('حدث خطأ في التعرف على الإجابات أو الطالب');
-        }
-        setIsGrading(false);
-      };
-      reader.readAsDataURL(file);
-    } catch (err) {
-      console.error(err);
-      toast.error('حدث خطأ أثناء الاتصال بالخادم');
-      setIsGrading(false);
+      } catch (err) {
+        console.error("Error processing file", err);
+      }
+    }
+    
+    setIsGrading(false);
+    // If multiple files were uploaded, show a summary toast or just stay in scanning state
+    if (files.length > 1) {
+      toast.success(`تم الانتهاء من تصحيح ${files.length} أوراق! يمكنك التحقق من النتائج في لوحة التحكم.`);
+      setScanState('IDLE');
     }
   };
 
@@ -215,6 +231,7 @@ export default function ScannerTab() {
               type="file" 
               accept="image/*" 
               capture="environment" 
+              multiple
               className="hidden" 
               onChange={handleCapturePaper}
               disabled={isGrading}

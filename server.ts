@@ -27,7 +27,7 @@ async function startServer() {
     if (role === 'grader' && password === 'grader') {
       return res.json({ success: true, token: 'grader-token' });
     }
-    if (role === 'school' && password === '09091234') {
+    if (role === 'school' && password === '0000') {
       return res.json({ success: true, token: 'school-token' });
     }
     res.status(401).json({ success: false, error: 'كلمة المرور أو الدور غير صحيح' });

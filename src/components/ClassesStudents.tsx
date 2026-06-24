@@ -36,21 +36,19 @@ export default function ClassesStudents() {
   };
 
   const deleteClass = async (id: number) => {
-    if (confirm('هل أنت متأكد من حذف هذا الصف وجميع الطلاب المرتبطين به؟')) {
-      await db.classes.delete(id);
-      const relatedStudents = await db.students.where('classId').equals(id).toArray();
-      for (const s of relatedStudents) {
-        if (s.id) await db.students.delete(s.id);
-      }
-      toast.success('تم حذف الصف بنجاح');
+    // Iframe friendly delete
+    await db.classes.delete(id);
+    const relatedStudents = await db.students.where('classId').equals(id).toArray();
+    for (const s of relatedStudents) {
+      if (s.id) await db.students.delete(s.id);
     }
+    toast.success('تم حذف الصف بنجاح');
   };
 
   const deleteStudent = async (id: number) => {
-    if (confirm('هل أنت متأكد من حذف هذا الطالب؟')) {
-      await db.students.delete(id);
-      toast.success('تم حذف الطالب بنجاح');
-    }
+    // Iframe friendly delete
+    await db.students.delete(id);
+    toast.success('تم حذف الطالب بنجاح');
   };
 
   return (
