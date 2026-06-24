@@ -3,8 +3,8 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
 import { KeyRound, Lock, Unlock } from 'lucide-react';
 
-export default function LockScreen({ onUnlocked }: { onUnlocked: (role: 'dashboard' | 'grader' | 'developer') => void }) {
-  const [role, setRole] = useState<'dashboard' | 'grader' | 'developer'>('dashboard');
+export default function LockScreen({ onUnlocked }: { onUnlocked: (role: 'dashboard' | 'grader' | 'school') => void }) {
+  const [role, setRole] = useState<'dashboard' | 'grader' | 'school'>('dashboard');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -17,8 +17,8 @@ export default function LockScreen({ onUnlocked }: { onUnlocked: (role: 'dashboa
   const handleUnlock = async () => {
     setError('');
     
-    // Developer initial setup override locally
-    if (role === 'developer' && !settings) {
+    // School initial setup override locally
+    if (role === 'school' && !settings) {
       if (password === '0909opin') {
         await db.settings.put({
           id: 1,
@@ -82,7 +82,7 @@ export default function LockScreen({ onUnlocked }: { onUnlocked: (role: 'dashboa
           >
             <option value="dashboard">لوحة تحكم (Dashboard)</option>
             <option value="grader">مصحح موزع (Grader)</option>
-            <option value="developer">مطور (Developer)</option>
+            <option value="school">مدرسة (School)</option>
           </select>
 
           <input

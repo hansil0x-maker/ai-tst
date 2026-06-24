@@ -27,8 +27,8 @@ async function startServer() {
     if (role === 'grader' && password === 'grader') {
       return res.json({ success: true, token: 'grader-token' });
     }
-    if (role === 'developer' && password === '0909opin') {
-      return res.json({ success: true, token: 'dev-token' });
+    if (role === 'school' && password === '0909opin') {
+      return res.json({ success: true, token: 'school-token' });
     }
     res.status(401).json({ success: false, error: 'كلمة المرور أو الدور غير صحيح' });
   });
@@ -64,10 +64,81 @@ async function startServer() {
     });
   });
 
+  app.post('/api/grade-exam', async (req, res) => {
+    try {
+      const { image, questions } = req.body;
+      const apiKey = process.env.GEMINI_API_KEY || 'AIzaSyCeCKHPsR4A1mhYS4GG1kxx614Umm2FIbo';
+      
+      if (!apiKey) {
+        return res.status(500).json({ error: 'GEMINI_API_KEY is missing' });
+      }
+
+      const ai = new GoogleGenAI({ apiKey });
+      
+      const fullPrompt = `You are an expert Optical Mark Recognition (OMR) system and exam grader. 
+I am providing you with an image of a student's multiple-choice exam answer sheet.
+I am also providing you with the answer key (number of questions and correct answers):
+${JSON.stringify(questions)}
+
+Your task is to analyze the image and determine the student's selected answer for EACH question.
+STRICT GRADING RULES:
+1. If the student bubbled/shaded exactly ONE option, return that option (A, B, C, or D).
+2. If the student bubbled/shaded MORE THAN ONE option for the same question, return "INVALID" (they get 0 points).
+3. If the student did NOT bubble/shade ANY option for a question, return "EMPTY" (they get 0 points).
+4. If the student wrote text or any answer other than properly shading the bubble, return "INVALID" (they get 0 points).
+
+Please return ONLY a valid JSON object matching this structure exactly:
+{
+  "answers": {
+    "1": "A",
+    "2": "INVALID",
+    "3": "EMPTY",
+    ...
+  }
+}
+Where keys are question IDs and values are the detected answer ('A', 'B', 'C', 'D', 'INVALID', or 'EMPTY').
+Ensure the output is clean JSON.`;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-pro',
+        contents: [
+          { text: fullPrompt },
+          { inlineData: { data: image, mimeType: 'image/jpeg' } }
+        ],
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              answers: {
+                type: Type.OBJECT,
+                additionalProperties: { type: Type.STRING }
+              }
+            },
+            required: ["answers"]
+          }
+        }
+      });
+
+      const rawText = response.text;
+      let json;
+      try {
+        json = JSON.parse(rawText);
+      } catch (e) {
+        json = JSON.parse(rawText.replace(/^```json\s*/, '').replace(/^```\s*/, '').replace(/\s*```$/, ''));
+      }
+      
+      res.json(json);
+    } catch (error: any) {
+      console.error("AI Grading Error:", error);
+      res.status(500).json({ error: "فشل في تصحيح الورقة عبر الذكاء الاصطناعي." });
+    }
+  });
+
   app.post('/api/generate-exam', async (req, res) => {
     try {
       const { prompt, content, files } = req.body;
-      const apiKey = process.env.GEMINI_API_KEY;
+      const apiKey = process.env.GEMINI_API_KEY || 'AIzaSyCeCKHPsR4A1mhYS4GG1kxx614Umm2FIbo';
       
       if (!apiKey) {
         return res.status(500).json({ error: 'GEMINI_API_KEY is missing' });

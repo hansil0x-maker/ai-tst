@@ -48,40 +48,79 @@ export default function ScannerTab() {
     }
   }, [scanState, students, selectedExamId]);
 
-  // Simulate OMR reading
-  useEffect(() => {
-    if (scanState === 'SCANNING_OMR' && selectedExamId !== 0) {
-      const exam = exams.find(e => e.id === selectedExamId);
-      if (!exam) return;
-      
-      // Simulate reading bubbles (in real app, this uses WASM/OpenCV)
-      setTimeout(() => {
-        const answers: Record<number, string> = {};
-        const options = ['A', 'B', 'C', 'D'];
-        exam.questions.forEach((q: any) => {
-           // 80% chance to be correct for mock data
-           answers[q.id] = Math.random() > 0.2 ? q.correctAnswer : options[Math.floor(Math.random() * options.length)];
-        });
-        setSimulatedAnswers(answers);
-        calculateAndSaveResult(exam, currentStudent, answers);
-        setScanState('RESULT');
-      }, 2000);
-    }
-  }, [scanState, selectedExamId]);
+  // State for tracking grading
+  const [isGrading, setIsGrading] = useState(false);
 
-  const calculateAndSaveResult = async (exam: any, student: any, answers: Record<number, string>) => {
+  const handleCapturePaper = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    const exam = exams.find(ex => ex.id === selectedExamId);
+    if (!exam) return;
+
+    setIsGrading(true);
+
+    try {
+      // Convert image to base64
+      const reader = new FileReader();
+      reader.onload = async (ev) => {
+        const base64Url = ev.target?.result as string;
+        if (!base64Url) return;
+        const base64Data = base64Url.split(',')[1];
+        
+        // Prepare correct answers map for prompt context
+        const questionsKey = exam.questions.map((q: any) => ({
+          id: q.id,
+          correctAnswer: q.correctAnswer
+        }));
+
+        const res = await fetch('/api/grade-exam', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: base64Data, questions: questionsKey })
+        });
+        
+        const data = await res.json();
+        
+        if (data.error) {
+          toast.error(data.error);
+          setIsGrading(false);
+          return;
+        }
+
+        if (data.answers) {
+          setSimulatedAnswers(data.answers);
+          await calculateAndSaveResult(exam, currentStudent, data.answers);
+          setScanState('RESULT');
+        } else {
+          toast.error('حدث خطأ في التعرف على الإجابات');
+        }
+        setIsGrading(false);
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      console.error(err);
+      toast.error('حدث خطأ أثناء الاتصال بالخادم');
+      setIsGrading(false);
+    }
+  };
+
+  const calculateAndSaveResult = async (exam: any, student: any, answers: Record<string, string>) => {
     let score = 0;
     const total = exam.questions.length;
     
     exam.questions.forEach((q: any) => {
-      if (answers[q.id] === q.correctAnswer) score++;
+      // The API returns strings like "A", "INVALID", "EMPTY"
+      if (answers[q.id.toString()] === q.correctAnswer) {
+        score++;
+      }
     });
 
     const percentage = Math.round((score / total) * 100);
-    let category = 'Fail';
-    if (percentage === 100) category = 'Perfect';
-    else if (score >= exam.passMark) category = 'Pass';
-
+    let category = 'راسب';
+    if (percentage === 100) category = 'مكمل'; // User requested this logic
+    else if (score >= exam.passMark) category = 'مكمل';
+    
     // Cheat Detection Engine
     const previousResults = await db.results.where('examId').equals(exam.id).toArray();
     let isCheatSuspected = false;
@@ -98,7 +137,6 @@ export default function ScannerTab() {
         }
         if (exactMatch) {
           isCheatSuspected = true;
-          // Flag the other student too
           if (pr.id) await db.results.update(pr.id, { isCheatSuspected: true });
           break;
         }
@@ -125,7 +163,6 @@ export default function ScannerTab() {
        await db.results.add(newResult);
     }
     
-    // Broadcast sync to dashboard
     syncManager.sendResults([newResult]);
   };
 
@@ -139,9 +176,8 @@ export default function ScannerTab() {
 
   const getCategoryLabel = (cat: string) => {
     switch (cat) {
-      case 'Perfect': return 'علامة كاملة';
-      case 'Pass': return 'ناجح';
-      case 'Fail': return 'راسب';
+      case 'مكمل': return 'مكمل / ناجح';
+      case 'راسب': return 'راسب';
       default: return cat;
     }
   };
@@ -178,10 +214,33 @@ export default function ScannerTab() {
       )}
 
       {scanState === 'SCANNING_OMR' && (
-        <div className="flex flex-col items-center justify-center py-20 space-y-4">
-           <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-           <h3 className="text-xl font-bold text-blue-500">جاري مسح الإجابات...</h3>
-           <p className="text-slate-400">تحليل ورقة الإجابة للطالب {currentStudent?.name}</p>
+        <div className="flex flex-col items-center justify-center py-20 space-y-6">
+          <div className="text-center space-y-2">
+            <h3 className="text-2xl font-bold text-white">تصحيح ورقة الإجابة</h3>
+            <p className="text-slate-400">الطالب: <span className="text-white font-medium">{currentStudent?.name}</span></p>
+          </div>
+          
+          <label className="w-full max-w-sm">
+            <div className={`w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-4 px-8 rounded-xl transition-colors text-lg text-center cursor-pointer flex justify-center items-center ${isGrading ? 'opacity-50 pointer-events-none' : ''}`}>
+              {isGrading ? (
+                <>
+                  <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin ml-2"></div>
+                  جاري تصحيح الإجابات...
+                </>
+              ) : (
+                'التقط صورة لورقة الإجابة'
+              )}
+            </div>
+            <input 
+              type="file" 
+              accept="image/*" 
+              capture="environment" 
+              className="hidden" 
+              onChange={handleCapturePaper}
+              disabled={isGrading}
+            />
+          </label>
+          <button onClick={() => setScanState('IDLE')} className="text-slate-400 hover:text-white pb-safe">إلغاء</button>
         </div>
       )}
 
@@ -201,7 +260,7 @@ export default function ScannerTab() {
                     </div>
                     <div className="h-12 w-px bg-slate-700"></div>
                     <div className="text-center">
-                      <p className={`text-4xl font-black ${finalScore.category === 'Pass' || finalScore.category === 'Perfect' ? 'text-emerald-500' : 'text-red-500'}`} dir="ltr">{finalScore.percentage}%</p>
+                      <p className={`text-4xl font-black ${finalScore.category === 'مكمل' ? 'text-emerald-500' : 'text-red-500'}`} dir="ltr">{finalScore.percentage}%</p>
                       <p className="text-sm text-slate-500 uppercase tracking-widest">{getCategoryLabel(finalScore.category)}</p>
                     </div>
                   </div>

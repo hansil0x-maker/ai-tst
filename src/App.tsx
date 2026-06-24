@@ -12,7 +12,7 @@ import MainLayout from './components/MainLayout';
 import { registerSW } from 'virtual:pwa-register';
 
 export default function App() {
-  const [role, setRole] = useState<'dashboard' | 'grader' | 'developer' | null>(null);
+  const [role, setRole] = useState<'dashboard' | 'grader' | 'school' | null>(null);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
   useEffect(() => {

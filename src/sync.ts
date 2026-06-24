@@ -22,39 +22,39 @@ class SyncManager {
     });
 
     this.socket.on('new_exam_received', async (exam) => {
-      if (this.role === 'grader') {
+      if (this.role === 'grader' || this.role === 'school') {
         const exists = await db.exams.get(exam.id);
         if (!exists) {
           await db.exams.add(exam);
-          toast.success(`تم استلام امتحان جديد من لوحة التحكم: ${exam.title}`);
+          toast.success(`تم استلام امتحان جديد: ${exam.title}`);
         }
       }
     });
 
     this.socket.on('results_received', async (results) => {
-      if (this.role === 'dashboard') {
+      if (this.role === 'dashboard' || this.role === 'school') {
         for (const r of results) {
           const exists = await db.results.where({ studentId: r.studentId, examId: r.examId }).first();
           if (!exists) {
             await db.results.add(r);
           }
         }
-        toast.success(`تم استلام ${results.length} نتائج جديدة من المُصحح`);
+        toast.success(`تم استلام ${results.length} نتائج جديدة`);
       }
     });
   }
 
   broadcastExam(exam: any) {
-    if (this.socket && this.role === 'dashboard') {
+    if (this.socket && (this.role === 'dashboard' || this.role === 'school')) {
       this.socket.emit('broadcast_exam', { roomId: this.roomId, exam });
       toast.success('تم إرسال الامتحان للمصححين بنجاح');
     }
   }
 
   sendResults(results: any[]) {
-    if (this.socket && this.role === 'grader') {
+    if (this.socket && (this.role === 'grader' || this.role === 'school')) {
       this.socket.emit('send_results', { roomId: this.roomId, results });
-      toast.success('تم إرسال النتائج للوحة التحكم بنجاح');
+      toast.success('تم إرسال النتائج بنجاح');
     }
   }
 

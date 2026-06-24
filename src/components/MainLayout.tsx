@@ -7,7 +7,7 @@ import ScannerTab from './ScannerTab';
 import SettingsTab from './SettingsTab';
 import { syncManager } from '../sync';
 
-export default function MainLayout({ role, onLock }: { role: 'dashboard' | 'grader' | 'developer', onLock: () => void }) {
+export default function MainLayout({ role, onLock }: { role: 'dashboard' | 'grader' | 'school', onLock: () => void }) {
   const [activeTab, setActiveTab] = useState(role === 'grader' ? 'scan' : 'dashboard');
 
   useEffect(() => {
@@ -40,12 +40,17 @@ export default function MainLayout({ role, onLock }: { role: 'dashboard' | 'grad
         { id: 'students', icon: <Users size={24} />, label: 'بيانات الطلاب والطباعة' },
       ];
     }
-    // Developer gets everything
+    // School gets everything (independent mode)
+    if (role === 'school') {
+      return [
+        { id: 'dashboard', icon: <Home size={24} />, label: 'الرئيسية' },
+        { id: 'exams', icon: <FileText size={24} />, label: 'الامتحانات' },
+        { id: 'scan', icon: <ScanLine size={24} />, label: 'المسح' },
+        { id: 'students', icon: <Users size={24} />, label: 'البيانات' },
+      ];
+    }
     return [
       { id: 'dashboard', icon: <Home size={24} />, label: 'الرئيسية' },
-      { id: 'exams', icon: <FileText size={24} />, label: 'الامتحانات' },
-      { id: 'scan', icon: <ScanLine size={24} />, label: 'المسح' },
-      { id: 'students', icon: <Users size={24} />, label: 'البيانات' },
     ];
   };
 
@@ -56,10 +61,10 @@ export default function MainLayout({ role, onLock }: { role: 'dashboard' | 'grad
       {/* Header */}
       <header className="flex justify-between items-center p-4 bg-slate-800 border-b border-slate-700 shrink-0">
         <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-blue-600 bg-clip-text text-transparent">
-          AI Tests - {role === 'dashboard' ? 'لوحة تحكم' : role === 'grader' ? 'مصحح موزع' : 'وضع المطور'}
+          AI Tests - {role === 'dashboard' ? 'لوحة تحكم' : role === 'grader' ? 'مصحح موزع' : 'وضع المدرسة'}
         </h1>
         <div className="flex space-x-4 space-x-reverse text-slate-400">
-          {(role === 'developer' || role === 'dashboard') && (
+          {(role === 'school' || role === 'dashboard') && (
             <button onClick={() => setActiveTab('settings')} className="hover:text-white"><Settings size={22} /></button>
           )}
           <button onClick={onLock} className="hover:text-white"><LogOut size={22} /></button>
