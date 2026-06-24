@@ -27,7 +27,7 @@ async function startServer() {
     if (role === 'grader' && password === 'grader') {
       return res.json({ success: true, token: 'grader-token' });
     }
-    if (role === 'school' && password === '0909opin') {
+    if (role === 'school' && password === '09091234') {
       return res.json({ success: true, token: 'school-token' });
     }
     res.status(401).json({ success: false, error: 'كلمة المرور أو الدور غير صحيح' });
@@ -100,7 +100,7 @@ Where keys are question IDs and values are the detected answer ('A', 'B', 'C', '
 Ensure the output is clean JSON.`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-pro',
+        model: 'gemini-2.5-flash',
         contents: [
           { text: fullPrompt },
           { inlineData: { data: image, mimeType: 'image/jpeg' } }
@@ -162,7 +162,7 @@ Ensure the output is clean JSON.`;
       }
 
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-pro',
+        model: 'gemini-2.5-flash',
         contents: parts,
         config: {
           responseMimeType: "application/json",

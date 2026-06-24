@@ -19,7 +19,7 @@ export default function LockScreen({ onUnlocked }: { onUnlocked: (role: 'dashboa
     
     // School initial setup override locally
     if (role === 'school' && !settings) {
-      if (password === '0909opin') {
+      if (password === '09091234') {
         await db.settings.put({
           id: 1,
           schoolName: 'مدرستي',
