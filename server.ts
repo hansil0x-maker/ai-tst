@@ -67,20 +67,22 @@ async function startServer() {
   app.post('/api/grade-exam', async (req, res) => {
     try {
       const { image, questions } = req.body;
-      const apiKey = process.env.GEMINI_API_KEY || 'AIzaSyCeCKHPsR4A1mhYS4GG1kxx614Umm2FIbo';
+      const apiKey = process.env.GEMINI_API_KEY || 'AQ.Ab8RN6JPts6sUTq1bDfswFqrG5j2nL46al4rilG_rtgecM6tog';
       
       if (!apiKey) {
         return res.status(500).json({ error: 'GEMINI_API_KEY is missing' });
       }
 
       const ai = new GoogleGenAI({ apiKey });
-      
-      const fullPrompt = `You are an expert Optical Mark Recognition (OMR) system and exam grader. 
+            const fullPrompt = `You are an expert Optical Mark Recognition (OMR) system and exam grader. 
 I am providing you with an image of a student's multiple-choice exam answer sheet.
 I am also providing you with the answer key (number of questions and correct answers):
 ${JSON.stringify(questions)}
 
-Your task is to analyze the image and determine the student's selected answer for EACH question.
+Your task is to analyze the image and:
+1. Extract the student's Serial Number (الرقم التسلسلي) printed on the paper.
+2. Determine the student's selected answer for EACH question.
+
 STRICT GRADING RULES:
 1. If the student bubbled/shaded exactly ONE option, return that option (A, B, C, or D).
 2. If the student bubbled/shaded MORE THAN ONE option for the same question, return "INVALID" (they get 0 points).
@@ -89,14 +91,14 @@ STRICT GRADING RULES:
 
 Please return ONLY a valid JSON object matching this structure exactly:
 {
+  "serialNumber": "student_serial_number_here",
   "answers": {
     "1": "A",
     "2": "INVALID",
-    "3": "EMPTY",
-    ...
+    "3": "EMPTY"
   }
 }
-Where keys are question IDs and values are the detected answer ('A', 'B', 'C', 'D', 'INVALID', or 'EMPTY').
+Where "serialNumber" is the string extracted from the paper, keys inside "answers" are question IDs, and values are the detected answer ('A', 'B', 'C', 'D', 'INVALID', or 'EMPTY').
 Ensure the output is clean JSON.`;
 
       const response = await ai.models.generateContent({
@@ -110,12 +112,13 @@ Ensure the output is clean JSON.`;
           responseSchema: {
             type: Type.OBJECT,
             properties: {
+              serialNumber: { type: Type.STRING },
               answers: {
                 type: Type.OBJECT,
                 additionalProperties: { type: Type.STRING }
               }
             },
-            required: ["answers"]
+            required: ["serialNumber", "answers"]
           }
         }
       });
@@ -146,7 +149,16 @@ Ensure the output is clean JSON.`;
 
       const ai = new GoogleGenAI({ apiKey });
       
-      const fullPrompt = `You are an expert teacher. Generate a Multiple Choice Questions (MCQ) exam based on the provided content or files.\n\nText Content:\n${content || 'None'}\n\nNotes from teacher: ${prompt || 'None'}\n\nPlease return ONLY a valid JSON object matching this structure:\n{ "questions": [ { "id": 1, "text": "Question text?", "options": {"A": "Opt1", "B": "Opt2", "C": "Opt3", "D": "Opt4"}, "correctAnswer": "A" } ] }\nMake sure it is perfect JSON.`;
+      const fullPrompt = `You are an expert teacher. Generate a Multiple Choice Questions (MCQ) exam based on the provided content or files. This exam will be automatically printed on paper for students.
+
+Text Content:
+${content || 'None'}
+
+Notes from teacher: ${prompt || 'None'}
+
+Please return ONLY a valid JSON object matching this structure:
+{ "questions": [ { "id": 1, "text": "Question text?", "options": {"A": "Opt1", "B": "Opt2", "C": "Opt3", "D": "Opt4"}, "correctAnswer": "A" } ] }
+Make sure it is perfect JSON.`;
 
       const parts: any[] = [{ text: fullPrompt }];
 

@@ -1,8 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
-import { Html5QrcodeScanner } from 'html5-qrcode';
+import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
-import { ScanLine, CheckCircle2, UserCircle, Calculator, AlertTriangle } from 'lucide-react';
+import { ScanLine, UserCircle, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { syncManager } from '../sync';
 
@@ -11,42 +10,12 @@ export default function ScannerTab() {
   const students = useLiveQuery(() => db.students.toArray()) || [];
   
   const [selectedExamId, setSelectedExamId] = useState<number>(0);
-  const [scanState, setScanState] = useState<'IDLE'|'SCANNING_SN'|'SCANNING_OMR'|'RESULT'>('IDLE');
+  const [scanState, setScanState] = useState<'IDLE'|'SCANNING_OMR'|'RESULT'>('IDLE');
   
   const [scannedSerial, setScannedSerial] = useState('');
   const [currentStudent, setCurrentStudent] = useState<any>(null);
   const [simulatedAnswers, setSimulatedAnswers] = useState<Record<number, string>>({});
   const [finalScore, setFinalScore] = useState<{score: number, percentage: number, category: string, isCheatSuspected: boolean} | null>(null);
-
-  useEffect(() => {
-    if (scanState === 'SCANNING_SN') {
-      const isMobile = window.innerWidth < 600;
-      const scanner = new Html5QrcodeScanner("reader", { 
-        fps: 10, 
-        qrbox: isMobile ? { width: 250, height: 250 } : { width: 300, height: 300 },
-        aspectRatio: 1.0,
-      }, false);
-      
-      scanner.render((decodedText) => {
-        setScannedSerial(decodedText);
-        const student = students.find(s => s.serialNumber === decodedText);
-        if (student) {
-          toast.success(`تم العثور على الطالب: ${student.name}`);
-          setCurrentStudent(student);
-          scanner.clear();
-          if (selectedExamId !== 0) {
-            setScanState('SCANNING_OMR');
-          } else {
-            setScanState('RESULT');
-          }
-        } else {
-          toast.error('لم يتم العثور على الرقم التسلسلي أو QR للطالب في قاعدة البيانات!');
-        }
-      }, (error) => { /* ignore generic errors */ });
-
-      return () => { scanner.clear().catch(e=>console.error(e)); };
-    }
-  }, [scanState, students, selectedExamId]);
 
   // State for tracking grading
   const [isGrading, setIsGrading] = useState(false);
@@ -55,6 +24,11 @@ export default function ScannerTab() {
     const file = e.target.files?.[0];
     if (!file) return;
     
+    if (selectedExamId === 0) {
+      toast.error('يجب اختيار الامتحان أولاً.');
+      return;
+    }
+
     const exam = exams.find(ex => ex.id === selectedExamId);
     if (!exam) return;
 
@@ -88,12 +62,20 @@ export default function ScannerTab() {
           return;
         }
 
-        if (data.answers) {
-          setSimulatedAnswers(data.answers);
-          await calculateAndSaveResult(exam, currentStudent, data.answers);
-          setScanState('RESULT');
+        if (data.serialNumber && data.answers) {
+          const student = students.find(s => s.serialNumber === data.serialNumber);
+          if (student) {
+            toast.success(`تم العثور على الطالب: ${student.name}`);
+            setCurrentStudent(student);
+            setScannedSerial(data.serialNumber);
+            setSimulatedAnswers(data.answers);
+            await calculateAndSaveResult(exam, student, data.answers);
+            setScanState('RESULT');
+          } else {
+            toast.error(`لم يتم العثور على طالب بالرقم التسلسلي: ${data.serialNumber}`);
+          }
         } else {
-          toast.error('حدث خطأ في التعرف على الإجابات');
+          toast.error('حدث خطأ في التعرف على الإجابات أو الطالب');
         }
         setIsGrading(false);
       };
@@ -171,7 +153,7 @@ export default function ScannerTab() {
     setCurrentStudent(null);
     setSimulatedAnswers({});
     setFinalScore(null);
-    setScanState('SCANNING_SN');
+    setScanState('IDLE');
   };
 
   const getCategoryLabel = (cat: string) => {
@@ -195,9 +177,15 @@ export default function ScannerTab() {
       {scanState === 'IDLE' && (
         <div className="flex flex-col items-center justify-center py-20">
           <ScanLine size={64} className="text-slate-600 mb-6" />
-          <p className="text-slate-400 mb-6 text-center max-w-sm">جاهز لمسح باركود الطالب للتعرف عليه، سيتم تصحيح إجاباته إذا تم تحديد امتحان.</p>
+          <p className="text-slate-400 mb-6 text-center max-w-sm">جاهز لالتقاط صورة لورقة الإجابة وتصحيحها وتحديد هوية الطالب فوراً.</p>
           <button 
-            onClick={() => setScanState('SCANNING_SN')}
+            onClick={() => {
+              if (selectedExamId === 0) {
+                toast.error('يجب اختيار الامتحان أولاً.');
+                return;
+              }
+              setScanState('SCANNING_OMR');
+            }}
             className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-8 rounded-xl transition-colors text-lg"
           >
             بدء المسح
@@ -205,19 +193,11 @@ export default function ScannerTab() {
         </div>
       )}
 
-      {scanState === 'SCANNING_SN' && (
-        <div className="space-y-4 flex flex-col items-center">
-          <h3 className="text-lg font-medium">امسح باركود الطالب</h3>
-          <div id="reader" className="w-full bg-slate-900 rounded-xl overflow-hidden border border-slate-700 text-white p-2"></div>
-          <button onClick={() => setScanState('IDLE')} className="text-slate-400 hover:text-white pb-safe">إلغاء</button>
-        </div>
-      )}
-
       {scanState === 'SCANNING_OMR' && (
         <div className="flex flex-col items-center justify-center py-20 space-y-6">
           <div className="text-center space-y-2">
             <h3 className="text-2xl font-bold text-white">تصحيح ورقة الإجابة</h3>
-            <p className="text-slate-400">الطالب: <span className="text-white font-medium">{currentStudent?.name}</span></p>
+            <p className="text-slate-400">التقط صورة لورقة الطالب، وسنتعرف عليه ونصوبها.</p>
           </div>
           
           <label className="w-full max-w-sm">
@@ -225,10 +205,10 @@ export default function ScannerTab() {
               {isGrading ? (
                 <>
                   <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin ml-2"></div>
-                  جاري تصحيح الإجابات...
+                  جاري تحليل الورقة...
                 </>
               ) : (
-                'التقط صورة لورقة الإجابة'
+                'التقط صورة للورقة'
               )}
             </div>
             <input 
