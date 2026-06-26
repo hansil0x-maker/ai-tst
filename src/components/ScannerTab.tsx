@@ -17,8 +17,106 @@ export default function ScannerTab() {
   const [simulatedAnswers, setSimulatedAnswers] = useState<Record<number, string>>({});
   const [finalScore, setFinalScore] = useState<{score: number, percentage: number, category: string, isCheatSuspected: boolean} | null>(null);
 
-  // State for tracking grading
   const [isGrading, setIsGrading] = useState(false);
+  const [useLiveCamera, setUseLiveCamera] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    if (scanState === 'SCANNING_OMR' && useLiveCamera) {
+      startCamera();
+    } else {
+      stopCamera();
+    }
+    return () => stopCamera();
+  }, [scanState, useLiveCamera]);
+
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('لا يمكن الوصول إلى الكاميرا. يرجى منح الصلاحيات أو استخدام رفع الصور.');
+      setUseLiveCamera(false);
+    }
+  };
+
+  const stopCamera = () => {
+    if (videoRef.current && videoRef.current.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream;
+      stream.getTracks().forEach(track => track.stop());
+      videoRef.current.srcObject = null;
+    }
+  };
+
+  const processImageBase64 = async (base64Data: string, exam: any, goResult: boolean) => {
+    const questionsKey = exam.questions.map((q: any) => ({
+      id: q.id,
+      correctAnswer: q.correctAnswer
+    }));
+
+    try {
+      const res = await fetch('/api/grade-exam', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: base64Data, questions: questionsKey })
+      });
+      
+      const data = await res.json();
+      
+      if (data.error) {
+        toast.error(data.error);
+        return false;
+      }
+
+      if (data.serialNumber && data.answers) {
+        const student = students.find(s => s.serialNumber === data.serialNumber);
+        if (student) {
+          toast.success(`تم التصحيح لـ: ${student.name}`);
+          setCurrentStudent(student);
+          setScannedSerial(data.serialNumber);
+          setSimulatedAnswers(data.answers);
+          await calculateAndSaveResult(exam, student, data.answers);
+          if (goResult) {
+            setScanState('RESULT');
+          }
+          return true;
+        } else {
+          toast.error(`لم يتم العثور على طالب بالرقم التسلسلي: ${data.serialNumber}`);
+        }
+      } else {
+        toast.error('حدث خطأ في التعرف على الإجابات أو الطالب');
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('حدث خطأ أثناء الاتصال بالخادم');
+    }
+    return false;
+  };
+
+  const handleCaptureLiveFrame = async () => {
+    if (!videoRef.current || !canvasRef.current) return;
+    if (selectedExamId === 0) return;
+    const exam = exams.find(ex => ex.id === selectedExamId);
+    if (!exam) return;
+
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const base64Data = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+    
+    setIsGrading(true);
+    await processImageBase64(base64Data, exam, true);
+    setIsGrading(false);
+  };
 
   const handleCapturePaper = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -34,73 +132,28 @@ export default function ScannerTab() {
 
     setIsGrading(true);
 
+    let successCount = 0;
     for (const file of files) {
-      try {
-        await new Promise<void>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = async (ev) => {
-            const base64Url = ev.target?.result as string;
-            if (!base64Url) { resolve(); return; }
-            const base64Data = base64Url.split(',')[1];
-            
-            const questionsKey = exam.questions.map((q: any) => ({
-              id: q.id,
-              correctAnswer: q.correctAnswer
-            }));
-
-            try {
-              const res = await fetch('/api/grade-exam', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ image: base64Data, questions: questionsKey })
-              });
-              
-              const data = await res.json();
-              
-              if (data.error) {
-                toast.error(data.error);
-                resolve();
-                return;
-              }
-
-              if (data.serialNumber && data.answers) {
-                const student = students.find(s => s.serialNumber === data.serialNumber);
-                if (student) {
-                  toast.success(`تم العثور على الطالب: ${student.name} وتم التصحيح.`);
-                  setCurrentStudent(student);
-                  setScannedSerial(data.serialNumber);
-                  setSimulatedAnswers(data.answers);
-                  await calculateAndSaveResult(exam, student, data.answers);
-                  // Only change state to RESULT if it's a single file or last file
-                  if (files.length === 1) {
-                    setScanState('RESULT');
-                  }
-                } else {
-                  toast.error(`لم يتم العثور على طالب بالرقم التسلسلي: ${data.serialNumber}`);
-                }
-              } else {
-                toast.error('حدث خطأ في التعرف على الإجابات أو الطالب');
-              }
-              resolve();
-            } catch (err) {
-              console.error(err);
-              toast.error('حدث خطأ أثناء الاتصال بالخادم');
-              resolve();
-            }
-          };
-          reader.readAsDataURL(file);
-        });
-      } catch (err) {
-        console.error("Error processing file", err);
-      }
+      await new Promise<void>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = async (ev) => {
+          const base64Url = ev.target?.result as string;
+          if (!base64Url) { resolve(); return; }
+          const base64Data = base64Url.split(',')[1];
+          const ok = await processImageBase64(base64Data, exam, files.length === 1);
+          if (ok) successCount++;
+          resolve();
+        };
+        reader.readAsDataURL(file);
+      });
     }
     
     setIsGrading(false);
-    // If multiple files were uploaded, show a summary toast or just stay in scanning state
     if (files.length > 1) {
-      toast.success(`تم الانتهاء من تصحيح ${files.length} أوراق! يمكنك التحقق من النتائج في لوحة التحكم.`);
+      toast.success(`تم تصحيح ${successCount} من ${files.length} بنجاح!`);
       setScanState('IDLE');
     }
+    if (e.target) e.target.value = '';
   };
 
   const calculateAndSaveResult = async (exam: any, student: any, answers: Record<string, string>) => {
@@ -210,34 +263,63 @@ export default function ScannerTab() {
       )}
 
       {scanState === 'SCANNING_OMR' && (
-        <div className="flex flex-col items-center justify-center py-20 space-y-6">
+        <div className="flex flex-col items-center justify-center py-10 space-y-6 w-full max-w-md mx-auto">
           <div className="text-center space-y-2">
             <h3 className="text-2xl font-bold text-white">تصحيح ورقة الإجابة</h3>
-            <p className="text-slate-400">التقط صورة لورقة الطالب، وسنتعرف عليه ونصوبها.</p>
+            <p className="text-slate-400">اختر طريقة المسح الضوئي</p>
+          </div>
+
+          <div className="flex bg-slate-800 p-1 rounded-xl w-full">
+            <button onClick={() => setUseLiveCamera(false)} className={`flex-1 py-2 text-sm rounded-lg transition-colors ${!useLiveCamera ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}>رفع صور</button>
+            <button onClick={() => setUseLiveCamera(true)} className={`flex-1 py-2 text-sm rounded-lg transition-colors ${useLiveCamera ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}>الكاميرا المباشرة</button>
           </div>
           
-          <label className="w-full max-w-sm">
-            <div className={`w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-4 px-8 rounded-xl transition-colors text-lg text-center cursor-pointer flex justify-center items-center ${isGrading ? 'opacity-50 pointer-events-none' : ''}`}>
-              {isGrading ? (
-                <>
-                  <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin ml-2"></div>
-                  جاري تحليل الورقة...
-                </>
-              ) : (
-                'التقط صورة للورقة'
-              )}
+          {!useLiveCamera ? (
+            <label className="w-full">
+              <div className={`w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-4 px-8 rounded-xl transition-colors text-lg text-center cursor-pointer flex justify-center items-center ${isGrading ? 'opacity-50 pointer-events-none' : ''}`}>
+                {isGrading ? (
+                  <>
+                    <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin ml-2"></div>
+                    جاري تحليل الأوراق...
+                  </>
+                ) : (
+                  'اختر صور للأوراق (صورة أو أكثر)'
+                )}
+              </div>
+              <input 
+                type="file" 
+                accept="image/*" 
+                capture="environment" 
+                multiple
+                className="hidden" 
+                onChange={handleCapturePaper}
+                disabled={isGrading}
+              />
+            </label>
+          ) : (
+            <div className="w-full space-y-4">
+              <div className="relative w-full aspect-[3/4] bg-black rounded-xl overflow-hidden border border-slate-700 flex items-center justify-center">
+                <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 w-full h-full object-cover"></video>
+                <canvas ref={canvasRef} className="hidden"></canvas>
+                <div className="absolute inset-4 border-2 border-dashed border-blue-500/50 rounded-lg pointer-events-none"></div>
+                
+                {isGrading && (
+                   <div className="absolute inset-0 bg-black/60 flex items-center justify-center flex-col z-10">
+                      <div className="w-10 h-10 border-4 border-white border-t-transparent rounded-full animate-spin mb-4"></div>
+                      <p className="text-white font-medium">جاري تحليل الورقة...</p>
+                   </div>
+                )}
+              </div>
+              <button 
+                onClick={handleCaptureLiveFrame}
+                disabled={isGrading}
+                className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-medium py-4 rounded-xl transition-colors text-lg"
+              >
+                التقاط وتصحيح
+              </button>
             </div>
-            <input 
-              type="file" 
-              accept="image/*" 
-              capture="environment" 
-              multiple
-              className="hidden" 
-              onChange={handleCapturePaper}
-              disabled={isGrading}
-            />
-          </label>
-          <button onClick={() => setScanState('IDLE')} className="text-slate-400 hover:text-white pb-safe">إلغاء</button>
+          )}
+          <button onClick={() => setScanState('IDLE')} className="text-slate-400 hover:text-white pb-safe pt-4">إلغاء الرجوع للرئيسية</button>
         </div>
       )}
 

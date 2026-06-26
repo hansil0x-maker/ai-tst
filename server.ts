@@ -140,16 +140,23 @@ Ensure the output is clean JSON.`;
 
   app.post('/api/generate-exam', async (req, res) => {
     try {
-      const { prompt, content, files } = req.body;
+      const { prompt, content, files, pagesConfig } = req.body;
       const apiKey = process.env.GEMINI_API_KEY || 'AIzaSyCeCKHPsR4A1mhYS4GG1kxx614Umm2FIbo';
       
       if (!apiKey) {
         return res.status(500).json({ error: 'GEMINI_API_KEY is missing' });
       }
 
+      let configPrompt = '';
+      if (pagesConfig === '1_page_1_face') configPrompt = 'Limit the exam to max 20 questions.';
+      if (pagesConfig === '1_page_2_faces') configPrompt = 'Generate around 40 questions if possible.';
+      if (pagesConfig === '2_pages_1_face') configPrompt = 'Generate around 40 well-distributed questions.';
+      if (pagesConfig === '2_pages_2_faces') configPrompt = 'Generate around 80 comprehensive questions.';
+
       const ai = new GoogleGenAI({ apiKey });
       
       const fullPrompt = `You are an expert teacher. Generate a Multiple Choice Questions (MCQ) exam based on the provided content or files. This exam will be automatically printed on paper for students.
+${configPrompt}
 
 Text Content:
 ${content || 'None'}

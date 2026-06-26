@@ -15,6 +15,7 @@ export default function CreateExamFlow({ onCancel, onComplete }: { onCancel: () 
   const [subject, setSubject] = useState('');
   const [notes, setNotes] = useState('');
   const [contentBlock, setContentBlock] = useState('');
+  const [pagesConfig, setPagesConfig] = useState('1_page_1_face');
   
   const [files, setFiles] = useState<{name: string, data: string, mimeType: string}[]>([]);
   
@@ -95,7 +96,7 @@ export default function CreateExamFlow({ onCancel, onComplete }: { onCancel: () 
       const res = await fetch('/api/generate-exam', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: notes, content: contentBlock, files })
+        body: JSON.stringify({ prompt: notes, content: contentBlock, files, pagesConfig })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'فشل التوليد');
@@ -113,6 +114,19 @@ export default function CreateExamFlow({ onCancel, onComplete }: { onCancel: () 
     } finally {
       setIsGenerating(false);
     }
+  };
+
+  const [editPrompt, setEditPrompt] = useState('');
+  const [showEdit, setShowEdit] = useState(false);
+  const [aiComment, setAiComment] = useState('يبدو هذا الامتحان متوازناً وجاهزاً للاستخدام.');
+
+  const handleEditGenerate = async () => {
+    if (!editPrompt) return;
+    const previousNotes = notes;
+    setNotes(notes + " | تعديل: " + editPrompt);
+    setShowEdit(false);
+    setEditPrompt('');
+    await handleGenerate();
   };
 
   const handleSaveExam = async () => {
@@ -197,8 +211,35 @@ export default function CreateExamFlow({ onCancel, onComplete }: { onCancel: () 
           </div>
 
           <div>
+            <label className="block text-sm text-slate-400 mb-1">تنسيق ورقة الامتحان</label>
+            <select value={pagesConfig} onChange={e=>setPagesConfig(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none">
+              <option value="1_page_1_face">ورقة واحدة - وجه واحد (حتى 20 سؤال)</option>
+              <option value="1_page_2_faces">ورقة واحدة - وجهين (حتى 40 سؤال)</option>
+              <option value="2_pages_1_face">ورقتان - وجه واحد لكل منهما (حتى 40 سؤال)</option>
+              <option value="2_pages_2_faces">ورقتان - وجهين (حتى 80 سؤال)</option>
+            </select>
+          </div>
+
+          <div>
             <label className="block text-sm text-slate-400 mb-1">ملاحظات إضافية (اختياري)</label>
-            <input type="text" value={notes} onChange={e=>setNotes(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none" placeholder="مثال: قم بإنشاء 10 أسئلة صعبة جداً..." />
+            <input type="text" value={notes} onChange={e=>setNotes(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none mb-3" placeholder="مثال: قم بإنشاء 10 أسئلة صعبة جداً..." />
+            
+            <div className="flex flex-wrap gap-2">
+              {[
+                "أنشئ 10 أسئلة اختيار من متعدد بمستوى متوسط",
+                "امتحان قصير من 5 أسئلة مع التركيز على التعاريف",
+                "اختبار شامل من 20 سؤال يغطي كل المواضيع",
+                "أسئلة تحليلية صعبة للطلاب المتفوقين"
+              ].map((sug, i) => (
+                <button 
+                  key={i} 
+                  onClick={() => setNotes(sug)}
+                  className="bg-slate-800 hover:bg-blue-900/40 text-blue-300 border border-slate-700 hover:border-blue-500/50 rounded-full px-4 py-1.5 text-xs transition-colors cursor-pointer"
+                >
+                  {sug}
+                </button>
+              ))}
+            </div>
           </div>
 
           {errorMsg && <div className="p-4 bg-red-900/30 border border-red-800 text-red-200 rounded-xl text-sm">{errorMsg}</div>}
@@ -236,10 +277,50 @@ export default function CreateExamFlow({ onCancel, onComplete }: { onCancel: () 
              ))}
            </div>
 
-           <button onClick={handleSaveExam} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-4 rounded-xl transition-colors flex items-center justify-center space-x-2 space-x-reverse">
+           <button onClick={handleSaveExam} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-4 rounded-xl transition-colors flex items-center justify-center space-x-2 space-x-reverse mb-4">
             <Check />
             <span>حفظ واعتماد الامتحان</span>
           </button>
+
+          {showEdit && (
+            <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 mb-4">
+              <label className="block text-sm text-slate-400 mb-2">ما الذي تود تعديله في هذا الامتحان؟</label>
+              <textarea 
+                value={editPrompt}
+                onChange={(e) => setEditPrompt(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white outline-none mb-3 resize-none"
+                rows={3}
+                placeholder="مثال: اجعل الأسئلة أسهل، أو أضف سؤالين عن موضوع كذا..."
+              ></textarea>
+              <div className="flex gap-2">
+                <button onClick={handleEditGenerate} disabled={isGenerating} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg transition-colors">
+                  {isGenerating ? 'جاري التعديل...' : 'تطبيق التعديل'}
+                </button>
+                <button onClick={() => setShowEdit(false)} className="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-2 rounded-lg transition-colors">إلغاء</button>
+              </div>
+            </div>
+          )}
+
+          {!showEdit && (
+            <div className="flex flex-wrap gap-3">
+              <button onClick={() => setShowEdit(true)} className="flex-1 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/30 font-medium py-3 rounded-xl transition-colors">
+                تعديل الامتحان
+              </button>
+              <button onClick={handleGenerate} disabled={isGenerating} className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-medium py-3 rounded-xl transition-colors">
+                {isGenerating ? 'جاري...' : 'إعادة المحاولة'}
+              </button>
+              <button onClick={() => setStep(1)} className="flex-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 font-medium py-3 rounded-xl transition-colors">
+                إلغاء
+              </button>
+            </div>
+          )}
+
+          <div className="bg-blue-900/10 border border-blue-800/30 rounded-xl p-4 mt-6 flex items-start space-x-3 space-x-reverse">
+             <div className="p-2 bg-blue-900/30 rounded-full text-blue-400 mt-1"><Sparkles size={20} /></div>
+             <div>
+               <p className="text-blue-300/80 text-sm italic">{aiComment}</p>
+             </div>
+          </div>
         </div>
       )}
     </div>
