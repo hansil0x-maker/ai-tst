@@ -14,10 +14,29 @@ export default function Dashboard() {
 
   const [selectedClassId, setSelectedClassId] = useState<number>(0);
   const [selectedExamId, setSelectedExamId] = useState<number>(0);
+  const [selectedSubject, setSelectedSubject] = useState<string>('All');
+  const [selectedYear, setSelectedYear] = useState<string>('All');
   const [activeList, setActiveList] = useState<'All'|'Fail'|'Pass'|'Perfect'>('All');
+  const [visibleResults, setVisibleResults] = useState(10);
+
+  const uniqueSubjects = useMemo(() => Array.from(new Set([...classes.map(c=>c.subject), ...exams.map(e=>e.subject)])), [classes, exams]);
+  const uniqueYears = useMemo(() => Array.from(new Set([...classes.map(c=>c.academicYear), ...exams.map(e=>e.academicYear)])).filter(Boolean), [classes, exams]);
 
   const filteredResults = useMemo(() => {
     let f = results;
+    
+    // Academic Year Filter
+    if (selectedYear !== 'All') {
+      const yearExams = exams.filter(e => e.academicYear === selectedYear).map(e => e.id);
+      f = f.filter(r => yearExams.includes(r.examId));
+    }
+    
+    // Subject Filter
+    if (selectedSubject !== 'All') {
+      const subjExams = exams.filter(e => e.subject === selectedSubject).map(e => e.id);
+      f = f.filter(r => subjExams.includes(r.examId));
+    }
+
     if (selectedExamId !== 0) f = f.filter(r => r.examId === selectedExamId);
     if (selectedClassId !== 0) {
       const classExams = exams.filter(e => e.classId === selectedClassId).map(e => e.id);
@@ -25,10 +44,30 @@ export default function Dashboard() {
     }
     if (activeList !== 'All') f = f.filter(r => r.category === activeList);
     return f;
-  }, [results, exams, selectedExamId, selectedClassId, activeList]);
+  }, [results, exams, selectedExamId, selectedClassId, activeList, selectedYear, selectedSubject]);
 
-  const passed = results.filter(r => r.category === 'Pass' || r.category === 'Perfect').length;
-  const cheated = results.filter(r => r.isCheatSuspected).length;
+  const filteredStudentsCount = useMemo(() => {
+    let f = students;
+    if (selectedYear !== 'All') {
+      const yearClasses = classes.filter(c => c.academicYear === selectedYear).map(c => c.id);
+      f = f.filter(s => yearClasses.includes(s.classId));
+    }
+    if (selectedClassId !== 0) {
+      f = f.filter(s => s.classId === selectedClassId);
+    }
+    return f.length;
+  }, [students, classes, selectedYear, selectedClassId]);
+
+  const filteredExamsCount = useMemo(() => {
+    let f = exams;
+    if (selectedYear !== 'All') f = f.filter(e => e.academicYear === selectedYear);
+    if (selectedSubject !== 'All') f = f.filter(e => e.subject === selectedSubject);
+    if (selectedClassId !== 0) f = f.filter(e => e.classId === selectedClassId);
+    return f.length;
+  }, [exams, selectedYear, selectedSubject, selectedClassId]);
+
+  const passed = filteredResults.filter(r => r.category === 'Pass' || r.category === 'Perfect').length;
+  const cheated = filteredResults.filter(r => r.isCheatSuspected).length;
 
   const getLabelList = (list: string) => {
     switch (list) {
@@ -133,17 +172,17 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-slate-800 p-4 rounded-2xl border border-slate-700 flex flex-col items-center justify-center text-center">
           <div className="text-blue-500 mb-2"><Users size={28} /></div>
-          <span className="text-3xl font-bold">{students.length}</span>
+          <span className="text-3xl font-bold">{filteredStudentsCount}</span>
           <span className="text-xs text-slate-400">إجمالي الطلاب</span>
         </div>
         <div className="bg-slate-800 p-4 rounded-2xl border border-slate-700 flex flex-col items-center justify-center text-center">
           <div className="text-emerald-500 mb-2"><FileText size={28} /></div>
-          <span className="text-3xl font-bold">{exams.length}</span>
+          <span className="text-3xl font-bold">{filteredExamsCount}</span>
           <span className="text-xs text-slate-400">إجمالي الامتحانات</span>
         </div>
         <div className="bg-slate-800 p-4 rounded-2xl border border-slate-700 flex flex-col items-center justify-center text-center">
           <div className="text-purple-500 mb-2"><CheckCircle size={28} /></div>
-          <span className="text-3xl font-bold">{results.length ? Math.round((passed / results.length) * 100) : 0}%</span>
+          <span className="text-3xl font-bold">{filteredResults.length ? Math.round((passed / filteredResults.length) * 100) : 0}%</span>
           <span className="text-xs text-slate-400">نسبة النجاح</span>
         </div>
         <div className="bg-slate-800 p-4 rounded-2xl border border-red-900/50 flex flex-col items-center justify-center text-center">
@@ -198,14 +237,22 @@ export default function Dashboard() {
         <div className="flex items-center space-x-2 space-x-reverse text-slate-300 font-medium pb-2 border-b border-slate-700">
            <Filter size={18} /> <span>فلاتر متقدمة للسجلات</span>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <select value={selectedYear} onChange={e=>setSelectedYear(e.target.value)} className="bg-slate-900 border border-slate-600 rounded-lg p-3 text-white outline-none">
+            <option value="All">كل الأعوام</option>
+            {uniqueYears.map((y, i) => <option key={i} value={y as string}>{y as string}</option>)}
+          </select>
+          <select value={selectedSubject} onChange={e=>setSelectedSubject(e.target.value)} className="bg-slate-900 border border-slate-600 rounded-lg p-3 text-white outline-none">
+            <option value="All">كل المواد</option>
+            {uniqueSubjects.map((s, i) => <option key={i} value={s as string}>{s as string}</option>)}
+          </select>
           <select value={selectedClassId} onChange={e=>setSelectedClassId(Number(e.target.value))} className="bg-slate-900 border border-slate-600 rounded-lg p-3 text-white outline-none">
             <option value={0}>كل الصفوف</option>
-            {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            {classes.filter(c => selectedYear === 'All' || c.academicYear === selectedYear).filter(c => selectedSubject === 'All' || c.subject === selectedSubject).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
           <select value={selectedExamId} onChange={e=>setSelectedExamId(Number(e.target.value))} className="bg-slate-900 border border-slate-600 rounded-lg p-3 text-white outline-none">
             <option value={0}>كل الامتحانات</option>
-            {exams.map(e => <option key={e.id} value={e.id}>{e.title}</option>)}
+            {exams.filter(e => selectedYear === 'All' || e.academicYear === selectedYear).filter(e => selectedSubject === 'All' || e.subject === selectedSubject).filter(e => selectedClassId === 0 || e.classId === selectedClassId).map(e => <option key={e.id} value={e.id}>{e.title}</option>)}
           </select>
         </div>
       </div>
@@ -225,7 +272,7 @@ export default function Dashboard() {
              <div className="p-8 text-center text-slate-500">لم يتم العثور على نتائج لهذه الفلاتر.</div>
            ) : (
              <div className="divide-y divide-slate-700">
-               {filteredResults.map(r => {
+               {filteredResults.slice(0, visibleResults).map(r => {
                  const st = students.find(s => s.id === r.studentId);
                  const ex = exams.find(e => e.id === r.examId);
                  return (
@@ -244,6 +291,17 @@ export default function Dashboard() {
                    </div>
                  );
                })}
+               
+               {filteredResults.length > visibleResults && (
+                 <div className="p-4 text-center">
+                   <button 
+                     onClick={() => setVisibleResults(v => v + 10)} 
+                     className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-full transition-colors border border-slate-700 text-sm"
+                   >
+                     عرض المزيد
+                   </button>
+                 </div>
+               )}
              </div>
            )}
         </div>

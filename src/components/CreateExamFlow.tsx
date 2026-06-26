@@ -1,18 +1,23 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
-import { ArrowLeft, Loader2, Sparkles, Check, CheckSquare, UploadCloud, X } from 'lucide-react';
+import { ArrowLeft, Loader2, Sparkles, Check, CheckSquare, UploadCloud, X, ChevronRight, ChevronLeft, Star } from 'lucide-react';
 import type { Question } from '../types';
 import toast from 'react-hot-toast';
 
 export default function CreateExamFlow({ onCancel, onComplete }: { onCancel: () => void, onComplete: () => void }) {
   const classes = useLiveQuery(() => db.classes.toArray()) || [];
   
+  const pastExams = useLiveQuery(() => db.exams.toArray()) || [];
+  const uniqueTitles = Array.from(new Set(pastExams.map(e => e.title))).filter(Boolean);
+  const uniqueSubjects = Array.from(new Set(pastExams.map(e => e.subject))).filter(Boolean);
+  
   const [step, setStep] = useState(1);
   
   const [title, setTitle] = useState('');
   const [classId, setClassId] = useState<number>(0);
   const [subject, setSubject] = useState('');
+  const [examDate, setExamDate] = useState(new Date().toISOString().split('T')[0]);
   const [notes, setNotes] = useState('');
   const [contentBlock, setContentBlock] = useState('');
   const [pagesConfig, setPagesConfig] = useState('1_page_1_face');
@@ -118,40 +123,62 @@ export default function CreateExamFlow({ onCancel, onComplete }: { onCancel: () 
 
   const [editPrompt, setEditPrompt] = useState('');
   const [showEdit, setShowEdit] = useState(false);
+  const [retryReason, setRetryReason] = useState('');
+  const [showRetry, setShowRetry] = useState(false);
   const [aiComment, setAiComment] = useState('يبدو هذا الامتحان متوازناً وجاهزاً للاستخدام.');
+  const [rating, setRating] = useState(0);
+  const [ratingComment, setRatingComment] = useState('');
+
+  const suggScrollRef = useRef<HTMLDivElement>(null);
 
   const handleEditGenerate = async () => {
     if (!editPrompt) return;
     const previousNotes = notes;
-    setNotes(notes + " | تعديل: " + editPrompt);
+    setNotes(notes ? notes + " | تعديل: " + editPrompt : "تعديل: " + editPrompt);
     setShowEdit(false);
     setEditPrompt('');
     await handleGenerate();
   };
 
-  const handleSaveExam = async () => {
+  const handleRetryGenerate = async () => {
+    if (retryReason) {
+      setNotes(notes ? notes + " | سبب الإعادة: " + retryReason : "سبب الإعادة: " + retryReason);
+    }
+    setShowRetry(false);
+    setRetryReason('');
+    await handleGenerate();
+  };
+
+  const handleProceedToRating = () => {
     if (!title || classId === 0 || !subject) {
       toast.error('يرجى العودة والرجاء ملء بيانات الامتحان الأساسية (العنوان، المادة، الصف) قبل الحفظ.');
       setStep(1);
       return;
     }
+    setStep(3);
+  };
 
+  const handleFinalSave = async () => {
     const correctAnswers: Record<number, string> = {};
     generatedQuestions.forEach(q => {
       correctAnswers[q.id] = q.correctAnswer;
     });
 
+    const currentSettings = await db.settings.get(1);
     await db.exams.add({
       title,
       classId,
       subject,
-      date: new Date().toISOString(),
+      date: examDate,
       totalMarks: generatedQuestions.length,
       passMark: Math.floor(generatedQuestions.length * 0.5),
       questions: generatedQuestions,
       correctAnswers,
-      status: 'Pending'
-    });
+      status: 'Pending',
+      rating,
+      ratingComment,
+      academicYear: currentSettings?.academicYear || '2026-2027'
+    } as any);
     
     toast.success('تم اعتماد وحفظ الامتحان!');
     onComplete();
@@ -169,13 +196,23 @@ export default function CreateExamFlow({ onCancel, onComplete }: { onCancel: () 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm text-slate-400 mb-1">عنوان الامتحان</label>
-              <input type="text" value={title} onChange={e=>setTitle(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none" placeholder="اختبار الفصل الأول..." />
+              <input type="text" list="titles-list" value={title} onChange={e=>setTitle(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none" placeholder="اختبار الفصل الأول..." />
+              <datalist id="titles-list">
+                {uniqueTitles.map((t, i) => <option key={i} value={t} />)}
+              </datalist>
             </div>
             <div>
               <label className="block text-sm text-slate-400 mb-1">المادة</label>
-              <input type="text" value={subject} onChange={e=>setSubject(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none" placeholder="الرياضيات..." />
+              <input type="text" list="subjects-list" value={subject} onChange={e=>setSubject(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none" placeholder="الرياضيات..." />
+              <datalist id="subjects-list">
+                {uniqueSubjects.map((s, i) => <option key={i} value={s} />)}
+              </datalist>
             </div>
-            <div className="sm:col-span-2">
+            <div>
+              <label className="block text-sm text-slate-400 mb-1">تاريخ الامتحان</label>
+              <input type="date" value={examDate} onChange={e=>setExamDate(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none" />
+            </div>
+            <div>
               <label className="block text-sm text-slate-400 mb-1">الصف المستهدف</label>
               <select value={classId} onChange={e=>setClassId(Number(e.target.value))} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none">
                 <option value={0}>اختر الصف...</option>
@@ -224,21 +261,34 @@ export default function CreateExamFlow({ onCancel, onComplete }: { onCancel: () 
             <label className="block text-sm text-slate-400 mb-1">ملاحظات إضافية (اختياري)</label>
             <input type="text" value={notes} onChange={e=>setNotes(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none mb-3" placeholder="مثال: قم بإنشاء 10 أسئلة صعبة جداً..." />
             
-            <div className="flex flex-wrap gap-2">
-              {[
-                "أنشئ 10 أسئلة اختيار من متعدد بمستوى متوسط",
-                "امتحان قصير من 5 أسئلة مع التركيز على التعاريف",
-                "اختبار شامل من 20 سؤال يغطي كل المواضيع",
-                "أسئلة تحليلية صعبة للطلاب المتفوقين"
-              ].map((sug, i) => (
-                <button 
-                  key={i} 
-                  onClick={() => setNotes(sug)}
-                  className="bg-slate-800 hover:bg-blue-900/40 text-blue-300 border border-slate-700 hover:border-blue-500/50 rounded-full px-4 py-1.5 text-xs transition-colors cursor-pointer"
-                >
-                  {sug}
-                </button>
-              ))}
+            <div className="relative group">
+              <button 
+                onClick={(e) => { e.preventDefault(); suggScrollRef.current?.scrollBy({ left: -150, behavior: 'smooth' }); }}
+                className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 bg-slate-800 border border-slate-600 p-1 rounded-full z-10 hidden group-hover:block hover:bg-slate-700"
+              ><ChevronRight size={16}/></button>
+              <button 
+                onClick={(e) => { e.preventDefault(); suggScrollRef.current?.scrollBy({ left: 150, behavior: 'smooth' }); }}
+                className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 bg-slate-800 border border-slate-600 p-1 rounded-full z-10 hidden group-hover:block hover:bg-slate-700"
+              ><ChevronLeft size={16}/></button>
+              
+              <div ref={suggScrollRef} className="flex overflow-x-auto gap-2 no-scrollbar scroll-smooth px-1">
+                {[
+                  "أنشئ 10 أسئلة اختيار من متعدد بمستوى متوسط",
+                  "امتحان قصير من 5 أسئلة مع التركيز على التعاريف",
+                  "اختبار شامل من 20 سؤال يغطي كل المواضيع",
+                  "أسئلة تحليلية صعبة للطلاب المتفوقين",
+                  "ركز على الفصول الثلاثة الأولى فقط",
+                  "تجنب الأسئلة التي تعتمد على الحفظ المباشر"
+                ].map((sug, i) => (
+                  <button 
+                    key={i} 
+                    onClick={() => setNotes(sug)}
+                    className="bg-slate-800 hover:bg-blue-900/40 text-blue-300 border border-slate-700 hover:border-blue-500/50 rounded-full px-4 py-1.5 text-xs transition-colors cursor-pointer whitespace-nowrap flex-shrink-0"
+                  >
+                    {sug}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -277,7 +327,7 @@ export default function CreateExamFlow({ onCancel, onComplete }: { onCancel: () 
              ))}
            </div>
 
-           <button onClick={handleSaveExam} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-4 rounded-xl transition-colors flex items-center justify-center space-x-2 space-x-reverse mb-4">
+           <button onClick={handleProceedToRating} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-4 rounded-xl transition-colors flex items-center justify-center space-x-2 space-x-reverse mb-4">
             <Check />
             <span>حفظ واعتماد الامتحان</span>
           </button>
@@ -301,13 +351,32 @@ export default function CreateExamFlow({ onCancel, onComplete }: { onCancel: () 
             </div>
           )}
 
-          {!showEdit && (
+          {showRetry && (
+            <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 mb-4">
+              <label className="block text-sm text-slate-400 mb-2">لماذا تود إعادة المحاولة؟ (اختياري)</label>
+              <textarea 
+                value={retryReason}
+                onChange={(e) => setRetryReason(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white outline-none mb-3 resize-none"
+                rows={2}
+                placeholder="مثال: الأسئلة طويلة جداً، أو غير مرتبطة بشكل كافي بالموضوع..."
+              ></textarea>
+              <div className="flex gap-2">
+                <button onClick={handleRetryGenerate} disabled={isGenerating} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg transition-colors">
+                  {isGenerating ? 'جاري الإعادة...' : 'تأكيد وإعادة'}
+                </button>
+                <button onClick={() => setShowRetry(false)} className="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-2 rounded-lg transition-colors">إلغاء</button>
+              </div>
+            </div>
+          )}
+
+          {!showEdit && !showRetry && (
             <div className="flex flex-wrap gap-3">
               <button onClick={() => setShowEdit(true)} className="flex-1 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/30 font-medium py-3 rounded-xl transition-colors">
                 تعديل الامتحان
               </button>
-              <button onClick={handleGenerate} disabled={isGenerating} className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-medium py-3 rounded-xl transition-colors">
-                {isGenerating ? 'جاري...' : 'إعادة المحاولة'}
+              <button onClick={() => setShowRetry(true)} disabled={isGenerating} className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-medium py-3 rounded-xl transition-colors">
+                إعادة المحاولة
               </button>
               <button onClick={() => setStep(1)} className="flex-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 font-medium py-3 rounded-xl transition-colors">
                 إلغاء
@@ -320,6 +389,47 @@ export default function CreateExamFlow({ onCancel, onComplete }: { onCancel: () 
              <div>
                <p className="text-blue-300/80 text-sm italic">{aiComment}</p>
              </div>
+          </div>
+        </div>
+      )}
+
+      {step === 3 && (
+        <div className="space-y-6">
+          <div className="bg-slate-800 border border-slate-700 p-6 rounded-2xl text-center space-y-4">
+            <h3 className="text-xl font-semibold text-white">تقييم الامتحان (اختياري)</h3>
+            <p className="text-slate-400 text-sm">كيف تقيم جودة الامتحان الذي تم توليده؟ إذا أعطيته 5 نجوم، سيتم استخدامه كنموذج تدريبي مستقبلاً لتحسين الامتحانات في هذه المادة.</p>
+            
+            <div className="flex justify-center space-x-2 space-x-reverse py-4">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <button 
+                  key={star} 
+                  onClick={() => setRating(star)}
+                  className={`p-2 transition-all transform hover:scale-110 ${rating >= star ? 'text-yellow-400' : 'text-slate-600'}`}
+                >
+                  <Star size={36} fill={rating >= star ? 'currentColor' : 'none'} />
+                </button>
+              ))}
+            </div>
+
+            {rating === 5 && (
+              <div className="text-right">
+                <label className="block text-sm text-slate-400 mb-2">تعليقك (اختياري)</label>
+                <textarea 
+                  value={ratingComment}
+                  onChange={(e) => setRatingComment(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white outline-none resize-none"
+                  rows={2}
+                  placeholder="ما الذي أعجبك في هذا الامتحان؟"
+                ></textarea>
+              </div>
+            )}
+            
+            <button onClick={handleFinalSave} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-4 rounded-xl transition-colors mt-4">
+              حفظ واعتماد نهائي
+            </button>
+            <button onClick={() => setStep(2)} className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 py-3 rounded-xl transition-colors mt-2">
+              رجوع
+            </button>
           </div>
         </div>
       )}

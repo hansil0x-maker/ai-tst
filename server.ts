@@ -238,6 +238,30 @@ Make sure it is perfect JSON.`;
     }
   });
 
+  app.post('/api/generate-recommendation', async (req, res) => {
+    try {
+      const { prompt } = req.body;
+      const apiKey = process.env.GEMINI_API_KEY || 'AIzaSyCeCKHPsR4A1mhYS4GG1kxx614Umm2FIbo';
+      if (!apiKey) {
+        return res.status(500).json({ error: 'GEMINI_API_KEY is missing' });
+      }
+
+      const ai = new GoogleGenAI({ apiKey });
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.1-pro-preview',
+        contents: prompt,
+        config: {
+          systemInstruction: 'You are a helpful AI assistant analyzing student performance.',
+        }
+      });
+      
+      res.json({ text: response.text });
+    } catch (error: any) {
+       console.error("AI Recommendation Error:", error);
+       res.status(500).json({ error: error.message || 'Error generating recommendation' });
+    }
+  });
+
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
       server: { middlewareMode: true },

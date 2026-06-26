@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
 import { ScanLine, UserCircle, AlertTriangle } from 'lucide-react';
@@ -33,6 +33,11 @@ export default function ScannerTab() {
 
   const startCamera = async () => {
     try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        toast.error('الكاميرا غير مدعومة في هذا المتصفح أو تتطلب اتصال آمن (HTTPS).');
+        setUseLiveCamera(false);
+        return;
+      }
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -104,6 +109,11 @@ export default function ScannerTab() {
     if (!exam) return;
 
     const video = videoRef.current;
+    if (!video.videoWidth || !video.videoHeight) {
+      toast.error('الكاميرا غير جاهزة بعد، يرجى الانتظار قليلاً');
+      return;
+    }
+
     const canvas = canvasRef.current;
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
@@ -114,7 +124,7 @@ export default function ScannerTab() {
     const base64Data = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
     
     setIsGrading(true);
-    await processImageBase64(base64Data, exam, true);
+    await processImageBase64(base64Data, exam, false); // Don't redirect immediately for live capture
     setIsGrading(false);
   };
 
@@ -317,9 +327,15 @@ export default function ScannerTab() {
               >
                 التقاط وتصحيح
               </button>
+              <button 
+                onClick={() => setScanState('IDLE')}
+                className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium py-3 rounded-xl transition-colors text-base"
+              >
+                إنهاء المسح والرجوع للرئيسية
+              </button>
             </div>
           )}
-          <button onClick={() => setScanState('IDLE')} className="text-slate-400 hover:text-white pb-safe pt-4">إلغاء الرجوع للرئيسية</button>
+          {!useLiveCamera && <button onClick={() => setScanState('IDLE')} className="text-slate-400 hover:text-white pb-safe pt-4">إلغاء الرجوع للرئيسية</button>}
         </div>
       )}
 

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Home, FileText, Users, ScanLine, Settings, LogOut } from 'lucide-react';
+import { Home, FileText, Users, ScanLine, Settings, LogOut, Bell } from 'lucide-react';
 import Dashboard from './Dashboard';
 import Exams from './Exams';
 import ClassesStudents from './ClassesStudents';
@@ -64,6 +64,7 @@ export default function MainLayout({ role, onLock }: { role: 'dashboard' | 'grad
           AI Tests - {role === 'dashboard' ? 'لوحة تحكم' : role === 'grader' ? 'مصحح موزع' : 'وضع المدرسة'}
         </h1>
         <div className="flex space-x-4 space-x-reverse text-slate-400">
+          <button onClick={() => toast('لا توجد إشعارات حالياً', { icon: '🔔' })} className="hover:text-white"><Bell size={22} /></button>
           {(role === 'school' || role === 'dashboard') && (
             <button onClick={() => setActiveTab('settings')} className="hover:text-white"><Settings size={22} /></button>
           )}

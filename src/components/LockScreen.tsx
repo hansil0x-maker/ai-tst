@@ -46,35 +46,8 @@ export default function LockScreen({ onUnlocked }: { onUnlocked: (role: 'dashboa
       return;
     }
 
-    setLoading(true);
-    try {
-      const res = await fetch('/api/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role, password })
-      });
-      
-      const data = await res.json();
-      if (data.success) {
-        onUnlocked(role);
-      } else {
-        setError(data.error || 'كلمة المرور غير صحيحة');
-      }
-    } catch (err) {
-      console.error(err);
-      // Fallback for offline usage
-      if (role === 'school' && password === '0000') {
-         onUnlocked(role);
-      } else if (role === 'dashboard' && password === 'admin') {
-         onUnlocked(role);
-      } else if (role === 'grader' && password === 'grader') {
-         onUnlocked(role);
-      } else {
-         setError('حدث خطأ أثناء الاتصال بالخادم. تأكد من اتصالك بالإنترنت');
-      }
-    } finally {
-      setLoading(false);
-    }
+    // Since server is not connected yet as per user, we will just show an error if it doesn't match local passwords.
+    setError('كلمة المرور غير صحيحة');
   };
 
   const isDevLogin = !settings;
@@ -88,7 +61,7 @@ export default function LockScreen({ onUnlocked }: { onUnlocked: (role: 'dashboa
           </div>
         </div>
         <h1 className="text-2xl font-bold text-center mb-2">تسجيل الدخول</h1>
-        <p className="text-center text-slate-400 mb-8">اختر الدور وأدخل كلمة المرور عبر السحاب.</p>
+        <p className="text-center text-slate-400 mb-8">اختر الدور وأدخل كلمة المرور.</p>
 
         <div className="space-y-4">
           <select 
@@ -120,7 +93,7 @@ export default function LockScreen({ onUnlocked }: { onUnlocked: (role: 'dashboa
             {loading ? 'جاري التحقق...' : 'دخول'}
           </button>
         </div>
-        <p className="text-center text-slate-500 mt-8 text-sm">التحديث 1.0.2</p>
+        <p className="text-center text-slate-500 mt-8 text-sm">التحديث 1.2.0</p>
       </div>
     </div>
   );

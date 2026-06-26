@@ -13,6 +13,7 @@ export interface ClassEntity {
   id?: number;
   name: string;
   subject: string;
+  academicYear?: string;
 }
 
 export interface Student {
@@ -33,6 +34,9 @@ export interface Exam {
   questions: any; // JSON string or object
   correctAnswers: Record<number, string>; // e.g. {1: 'A', 2: 'B'}
   status: 'Pending' | 'Completed';
+  rating?: number;
+  ratingComment?: string;
+  academicYear?: string;
 }
 
 export interface Result {
@@ -60,6 +64,17 @@ db.version(1).stores({
   students: '++id, serialNumber, name, classId',
   exams: '++id, title, date, classId, subject, status',
   results: '++id, examId, studentId, isCheatSuspected'
+});
+
+db.version(2).stores({
+  classes: '++id, name, subject, academicYear',
+  exams: '++id, title, date, classId, subject, status, academicYear'
+}).upgrade(tx => {
+  return tx.table('settings').get(1).then(settings => {
+    const year = settings ? settings.academicYear : '2026-2027';
+    return tx.table('classes').toCollection().modify(c => { c.academicYear = c.academicYear || year; })
+      .then(() => tx.table('exams').toCollection().modify(e => { e.academicYear = e.academicYear || year; }));
+  });
 });
 
 export { db };
