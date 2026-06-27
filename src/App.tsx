@@ -10,6 +10,8 @@ import LockScreen from './components/LockScreen';
 import MainLayout from './components/MainLayout';
 // @ts-ignore
 import { registerSW } from 'virtual:pwa-register';
+import { exportDB } from 'dexie-export-import';
+import { db } from './db/db';
 
 export default function App() {
   const [role, setRole] = useState<'dashboard' | 'grader' | 'school' | null>(null);
@@ -31,6 +33,29 @@ export default function App() {
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
+
+    // Auto-backup logic (every 7 days)
+    const lastBackup = localStorage.getItem('nexus_last_backup');
+    const now = new Date().getTime();
+    const daysSince = lastBackup ? (now - parseInt(lastBackup)) / (1000 * 60 * 60 * 24) : 999;
+    
+    if (daysSince >= 7) {
+      const performBackup = async () => {
+        try {
+          const blob = await exportDB(db, { prettyJson: true });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `NexusEdu_AutoBackup_${new Date().toISOString().split('T')[0]}.json`;
+          a.click();
+          localStorage.setItem('nexus_last_backup', now.toString());
+          toast.success('تم تنزيل نسخة احتياطية تلقائية لبياناتك');
+        } catch (e) {
+          console.error("Auto backup failed", e);
+        }
+      };
+      setTimeout(performBackup, 5000);
+    }
 
     return () => {
       window.removeEventListener('online', handleOnline);

@@ -76,7 +76,19 @@ export default function ScannerTab() {
         body: JSON.stringify({ image: base64Data, questions: questionsKey })
       });
       
-      const data = await res.json();
+      const textResponse = await res.text();
+      let data;
+      try {
+        data = JSON.parse(textResponse);
+      } catch (err) {
+        toast.error("خطأ في الخادم (قد تكون الصورة كبيرة جداً). " + textResponse.substring(0, 30));
+        return false;
+      }
+      
+      if (!res.ok) {
+        toast.error(data.error || "حدث خطأ غير متوقع");
+        return false;
+      }
       
       if (data.error) {
         toast.error(data.error);

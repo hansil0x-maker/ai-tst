@@ -12,9 +12,9 @@ export default function Dashboard() {
   const classes = useLiveQuery(() => db.classes.toArray()) || [];
   const results = useLiveQuery(() => db.results.toArray()) || [];
 
-  const [selectedClassIds, setSelectedClassIds] = useState<number[]>([]);
-  const [selectedExamIds, setSelectedExamIds] = useState<number[]>([]);
-  const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
+  const [selectedClassId, setSelectedClassId] = useState<number>(0);
+  const [selectedExamId, setSelectedExamId] = useState<number>(0);
+  const [selectedSubject, setSelectedSubject] = useState<string>('All');
   const [selectedYear, setSelectedYear] = useState<string>('All');
   const [activeList, setActiveList] = useState<'All'|'Fail'|'Pass'|'Perfect'>('All');
   const [visibleResults, setVisibleResults] = useState(10);
@@ -32,19 +32,19 @@ export default function Dashboard() {
     }
     
     // Subject Filter
-    if (selectedSubjects.length > 0 && !selectedSubjects.includes('All')) {
-      const subjExams = exams.filter(e => selectedSubjects.includes(e.subject)).map(e => e.id);
+    if (selectedSubject !== 'All') {
+      const subjExams = exams.filter(e => e.subject === selectedSubject).map(e => e.id);
       f = f.filter(r => subjExams.includes(r.examId));
     }
 
-    if (selectedExamIds.length > 0 && !selectedExamIds.includes(0)) f = f.filter(r => selectedExamIds.includes(r.examId));
-    if (selectedClassIds.length > 0 && !selectedClassIds.includes(0)) {
-      const classExams = exams.filter(e => selectedClassIds.includes(e.classId)).map(e => e.id);
+    if (selectedExamId !== 0) f = f.filter(r => r.examId === selectedExamId);
+    if (selectedClassId !== 0) {
+      const classExams = exams.filter(e => e.classId === selectedClassId).map(e => e.id);
       f = f.filter(r => classExams.includes(r.examId));
     }
     if (activeList !== 'All') f = f.filter(r => r.category === activeList);
     return f;
-  }, [results, exams, selectedExamIds, selectedClassIds, activeList, selectedYear, selectedSubjects]);
+  }, [results, exams, selectedExamId, selectedClassId, activeList, selectedYear, selectedSubject]);
 
   const filteredStudentsCount = useMemo(() => {
     let f = students;
@@ -52,19 +52,19 @@ export default function Dashboard() {
       const yearClasses = classes.filter(c => c.academicYear === selectedYear).map(c => c.id);
       f = f.filter(s => yearClasses.includes(s.classId));
     }
-    if (selectedClassIds.length > 0 && !selectedClassIds.includes(0)) {
-      f = f.filter(s => selectedClassIds.includes(s.classId));
+    if (selectedClassId !== 0) {
+      f = f.filter(s => s.classId === selectedClassId);
     }
     return f.length;
-  }, [students, classes, selectedYear, selectedClassIds]);
+  }, [students, classes, selectedYear, selectedClassId]);
 
   const filteredExamsCount = useMemo(() => {
     let f = exams;
     if (selectedYear !== 'All') f = f.filter(e => e.academicYear === selectedYear);
-    if (selectedSubjects.length > 0 && !selectedSubjects.includes('All')) f = f.filter(e => selectedSubjects.includes(e.subject));
-    if (selectedClassIds.length > 0 && !selectedClassIds.includes(0)) f = f.filter(e => selectedClassIds.includes(e.classId));
+    if (selectedSubject !== 'All') f = f.filter(e => e.subject === selectedSubject);
+    if (selectedClassId !== 0) f = f.filter(e => e.classId === selectedClassId);
     return f.length;
-  }, [exams, selectedYear, selectedSubjects, selectedClassIds]);
+  }, [exams, selectedYear, selectedSubject, selectedClassId]);
 
   const passed = filteredResults.filter(r => r.category === 'Pass' || r.category === 'Perfect').length;
   const cheated = filteredResults.filter(r => r.isCheatSuspected).length;
@@ -184,7 +184,7 @@ export default function Dashboard() {
   }, [filteredResults]);
 
   const barData = useMemo(() => {
-    if (selectedExamIds.length === 1 && selectedExamIds[0] !== 0) {
+    if (selectedExamId !== 0) {
       // Show distribution of scores for the exam
       const bins = {'0-20%':0, '21-40%':0, '41-60%':0, '61-80%':0, '81-100%':0};
       filteredResults.forEach(r => {
@@ -207,7 +207,7 @@ export default function Dashboard() {
       const ex = exams.find(e => e.id === Number(eId));
       return { name: ex?.title?.substring(0, 10) + '..' || 'Unknown', count: Math.round(d.sum / d.count) };
     });
-  }, [filteredResults, exams, selectedExamIds]);
+  }, [filteredResults, exams, selectedExamId]);
 
   return (
     <div className="space-y-6 pb-20">
@@ -292,17 +292,17 @@ export default function Dashboard() {
             <option value="All">كل الأعوام</option>
             {uniqueYears.map((y, i) => <option key={i} value={y as string}>{y as string}</option>)}
           </select>
-          <select multiple value={selectedSubjects} onChange={e=>setSelectedSubjects(Array.from(e.target.selectedOptions, option => option.value))} className="bg-slate-900 border border-slate-600 rounded-lg p-3 text-white outline-none h-24">
+          <select value={selectedSubject} onChange={e=>setSelectedSubject(e.target.value)} className="bg-slate-900 border border-slate-600 rounded-lg p-3 text-white outline-none">
             <option value="All">كل المواد</option>
             {uniqueSubjects.map((s, i) => <option key={i} value={s as string}>{s as string}</option>)}
           </select>
-          <select multiple value={selectedClassIds.map(String)} onChange={e=>setSelectedClassIds(Array.from(e.target.selectedOptions, option => Number(option.value)))} className="bg-slate-900 border border-slate-600 rounded-lg p-3 text-white outline-none h-24">
+          <select value={selectedClassId} onChange={e=>setSelectedClassId(Number(e.target.value))} className="bg-slate-900 border border-slate-600 rounded-lg p-3 text-white outline-none">
             <option value="0">كل الصفوف</option>
-            {classes.filter(c => selectedYear === 'All' || c.academicYear === selectedYear).filter(c => selectedSubjects.includes('All') || selectedSubjects.length === 0 || selectedSubjects.includes(c.subject)).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            {classes.filter(c => selectedYear === 'All' || c.academicYear === selectedYear).filter(c => selectedSubject === 'All' || c.subject === selectedSubject).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
-          <select multiple value={selectedExamIds.map(String)} onChange={e=>setSelectedExamIds(Array.from(e.target.selectedOptions, option => Number(option.value)))} className="bg-slate-900 border border-slate-600 rounded-lg p-3 text-white outline-none h-24">
+          <select value={selectedExamId} onChange={e=>setSelectedExamId(Number(e.target.value))} className="bg-slate-900 border border-slate-600 rounded-lg p-3 text-white outline-none">
             <option value="0">كل الامتحانات</option>
-            {exams.filter(e => selectedYear === 'All' || e.academicYear === selectedYear).filter(e => selectedSubjects.includes('All') || selectedSubjects.length === 0 || selectedSubjects.includes(e.subject)).filter(e => selectedClassIds.includes(0) || selectedClassIds.length === 0 || selectedClassIds.includes(e.classId)).map(e => <option key={e.id} value={e.id}>{e.title}</option>)}
+            {exams.filter(e => selectedYear === 'All' || e.academicYear === selectedYear).filter(e => selectedSubject === 'All' || e.subject === selectedSubject).filter(e => selectedClassId === 0 || e.classId === selectedClassId).map(e => <option key={e.id} value={e.id}>{e.title}</option>)}
           </select>
         </div>
       </div>

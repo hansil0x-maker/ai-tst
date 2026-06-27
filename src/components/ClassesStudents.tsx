@@ -195,7 +195,7 @@ export default function ClassesStudents() {
   const filteredStudents = students.filter(s => s.name.includes(studentFilter) || s.serialNumber.includes(studentFilter));
 
   return (
-    <div className="space-y-8 pb-20">
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 pb-20">
       
       {/* Classes Section */}
       <div className="space-y-4">

@@ -123,12 +123,16 @@ Ensure the output is clean JSON.`;
         }
       });
 
-      const rawText = response.text;
+      let rawText = response.text.trim();
+      if (rawText.startsWith('```')) {
+         rawText = rawText.replace(/^```json\s*/, '').replace(/^```\s*/, '').replace(/\s*```$/, '');
+      }
+      
       let json;
       try {
         json = JSON.parse(rawText);
-      } catch (e) {
-        json = JSON.parse(rawText.replace(/^```json\s*/, '').replace(/^```\s*/, '').replace(/\s*```$/, ''));
+      } catch (e: any) {
+        throw new Error("استجابة غير متوقعة من الخادم: " + rawText.substring(0, 50));
       }
       
       res.json(json);
