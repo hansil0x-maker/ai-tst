@@ -16,6 +16,7 @@ export default function Exams() {
   const exams = useLiveQuery(() => db.exams.toArray()) || [];
   const classes = useLiveQuery(() => db.classes.toArray()) || [];
   const settings = useLiveQuery(() => db.settings.get(1));
+  const results = useLiveQuery(() => db.results.toArray()) || [];
 
   useEffect(() => {
     if (exams.length === 0) return;
@@ -53,16 +54,19 @@ export default function Exams() {
     const diffTime = examDate.getTime() - today.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     
-    if (exam.status === 'Completed' || diffDays < 0) {
-      return <span className="flex items-center text-emerald-400 text-xs"><CheckCircle size={14} className="ml-1" /> تم</span>;
+    if (diffDays < 0) {
+      const examResults = results.filter(r => r.examId === exam.id);
+      if (examResults.length > 0) {
+        return <span className="flex items-center text-emerald-400 text-xs"><CheckCircle size={14} className="ml-1" /> بعد الامتحان (تم التصحيح)</span>;
+      } else {
+        return <span className="flex items-center text-amber-400 text-xs"><Clock size={14} className="ml-1" /> بعد الامتحان (غير مصحح)</span>;
+      }
     }
     
     if (diffDays === 0) {
-      return <span className="flex items-center text-yellow-400 text-xs"><Clock size={14} className="ml-1" /> اليوم</span>;
-    } else if (diffDays === 1) {
-      return <span className="flex items-center text-blue-400 text-xs"><Clock size={14} className="ml-1" /> غداً</span>;
+      return <span className="flex items-center text-blue-400 text-xs"><Clock size={14} className="ml-1" /> يوم الامتحان</span>;
     } else {
-      return <span className="flex items-center text-slate-400 text-xs"><Clock size={14} className="ml-1" /> متبقي {diffDays} أيام</span>;
+      return <span className="flex items-center text-slate-400 text-xs"><Clock size={14} className="ml-1" /> قبل الامتحان ({diffDays} أيام)</span>;
     }
   };
 

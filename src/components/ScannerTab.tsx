@@ -9,13 +9,19 @@ export default function ScannerTab() {
   const exams = useLiveQuery(() => db.exams.toArray()) || [];
   const students = useLiveQuery(() => db.students.toArray()) || [];
   
+  const results = useLiveQuery(() => db.results.toArray()) || [];
+  
   const [selectedExamId, setSelectedExamId] = useState<number>(0);
   const [scanState, setScanState] = useState<'IDLE'|'SCANNING_OMR'|'RESULT'>('IDLE');
+  
+  const [filterClass, setFilterClass] = useState<number>(0);
+  const [filterExam, setFilterExam] = useState<number>(0);
+  const [visibleResults, setVisibleResults] = useState(5);
   
   const [scannedSerial, setScannedSerial] = useState('');
   const [currentStudent, setCurrentStudent] = useState<any>(null);
   const [simulatedAnswers, setSimulatedAnswers] = useState<Record<number, string>>({});
-  const [finalScore, setFinalScore] = useState<{score: number, percentage: number, category: string, isCheatSuspected: boolean} | null>(null);
+  const [finalScore, setFinalScore] = useState<{score: number, percentage: number, category: string, isCheatSuspected: boolean, errors?: any[], correctCount?: number, wrongCount?: number} | null>(null);
 
   const [isGrading, setIsGrading] = useState(false);
   const [useLiveCamera, setUseLiveCamera] = useState(false);
@@ -169,18 +175,25 @@ export default function ScannerTab() {
   const calculateAndSaveResult = async (exam: any, student: any, answers: Record<string, string>) => {
     let score = 0;
     const total = exam.questions.length;
+    const errors: any[] = [];
     
-    exam.questions.forEach((q: any) => {
-      // The API returns strings like "A", "INVALID", "EMPTY"
-      if (answers[q.id.toString()] === q.correctAnswer) {
+    exam.questions.forEach((q: any, index: number) => {
+      const studentAns = answers[q.id.toString()];
+      if (studentAns === q.correctAnswer) {
         score++;
+      } else {
+        errors.push({
+          number: index + 1,
+          selected: studentAns || 'لم يجب',
+          correct: q.correctAnswer
+        });
       }
     });
 
     const percentage = Math.round((score / total) * 100);
-    let category = 'راسب';
-    if (percentage === 100) category = 'مكمل'; // User requested this logic
-    else if (score >= exam.passMark) category = 'مكمل';
+    let category = 'Fail';
+    if (percentage === 100) category = 'Perfect'; 
+    else if (score >= exam.passMark) category = 'Pass';
     
     // Cheat Detection Engine
     const previousResults = await db.results.where('examId').equals(exam.id).toArray();
@@ -214,7 +227,7 @@ export default function ScannerTab() {
       isCheatSuspected
     };
 
-    setFinalScore(newResult);
+    setFinalScore({ ...newResult, errors, correctCount: score, wrongCount: total - score });
     
     // Save or update Result
     const existing = await db.results.where({ examId: exam.id, studentId: student.id }).first();
@@ -237,38 +250,127 @@ export default function ScannerTab() {
 
   const getCategoryLabel = (cat: string) => {
     switch (cat) {
-      case 'مكمل': return 'مكمل / ناجح';
-      case 'راسب': return 'راسب';
+      case 'Perfect': return 'علامة كاملة';
+      case 'Pass': return 'ناجح';
+      case 'Fail': return 'راسب';
       default: return cat;
     }
   };
+
+  const filteredResults = results.filter(r => {
+    let match = true;
+    if (filterExam !== 0 && r.examId !== filterExam) match = false;
+    if (filterClass !== 0) {
+       const exam = exams.find(e => e.id === r.examId);
+       if (!exam || exam.classId !== filterClass) match = false;
+    }
+    return match;
+  });
 
   return (
     <div className="space-y-6 pb-20">
       <div className="flex border-b border-slate-700 pb-4 justify-between items-center">
         <h2 className="text-2xl font-semibold">المسح الضوئي</h2>
         <select value={selectedExamId} onChange={e=>setSelectedExamId(Number(e.target.value))} className="bg-slate-800 border border-slate-600 rounded-lg p-2 text-white outline-none">
-          <option value={0}>اختر امتحان (اختياري)</option>
+          <option value={0}>اختر امتحاناً</option>
           {exams.map(e => <option key={e.id} value={e.id} dir="auto">{e.title}</option>)}
         </select>
       </div>
 
       {scanState === 'IDLE' && (
-        <div className="flex flex-col items-center justify-center py-20">
-          <ScanLine size={64} className="text-slate-600 mb-6" />
-          <p className="text-slate-400 mb-6 text-center max-w-sm">جاهز لالتقاط صورة لورقة الإجابة وتصحيحها وتحديد هوية الطالب فوراً.</p>
-          <button 
-            onClick={() => {
-              if (selectedExamId === 0) {
-                toast.error('يجب اختيار الامتحان أولاً.');
-                return;
-              }
-              setScanState('SCANNING_OMR');
-            }}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-8 rounded-xl transition-colors text-lg"
-          >
-            بدء المسح
-          </button>
+        <div className="space-y-8">
+          <div className="flex flex-col items-center justify-center py-10 bg-slate-800/50 rounded-2xl border border-slate-700/50">
+            <ScanLine size={64} className="text-slate-600 mb-6" />
+            <p className="text-slate-400 mb-6 text-center max-w-sm">جاهز لالتقاط صورة لورقة الإجابة وتصحيحها وتحديد هوية الطالب فوراً.</p>
+            <button 
+              onClick={() => {
+                if (selectedExamId === 0) {
+                  toast.error('يجب اختيار الامتحان أولاً.');
+                  return;
+                }
+                setScanState('SCANNING_OMR');
+              }}
+              className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-8 rounded-xl transition-colors text-lg"
+            >
+              بدء المسح
+            </button>
+          </div>
+          
+          <div className="space-y-4">
+            <div className="flex justify-between items-center border-b border-slate-700 pb-2">
+              <h3 className="text-xl font-bold text-white">النتائج الممسوحة</h3>
+              <div className="flex gap-2">
+                <select value={filterClass} onChange={e=>setFilterClass(Number(e.target.value))} className="bg-slate-900 border border-slate-700 rounded-lg p-2 text-white outline-none text-sm">
+                  <option value={0}>كل الصفوف</option>
+                  {Array.from(new Set(exams.map(e => e.classId))).map(cId => {
+                    // Quick hack to get class name, ideal would be to use `classes` from db but we don't have it imported here.
+                    return <option key={cId} value={cId}>صف {cId}</option>
+                  })}
+                </select>
+                <select value={filterExam} onChange={e=>setFilterExam(Number(e.target.value))} className="bg-slate-900 border border-slate-700 rounded-lg p-2 text-white outline-none text-sm">
+                  <option value={0}>كل الامتحانات</option>
+                  {exams.map(e => <option key={e.id} value={e.id}>{e.title}</option>)}
+                </select>
+              </div>
+            </div>
+            
+            <div className="space-y-3">
+               {filteredResults.slice(0, visibleResults).map(r => {
+                 const student = students.find(s => s.id === r.studentId);
+                 const exam = exams.find(e => e.id === r.examId);
+                 
+                 // Calculate errors
+                 let errors = 0;
+                 let correct = 0;
+                 const errorDetails: string[] = [];
+                 if (exam && exam.questions) {
+                    exam.questions.forEach((q: any) => {
+                       const studentAns = r.scannedAnswers[q.id.toString()];
+                       if (studentAns === q.correctAnswer) {
+                          correct++;
+                       } else {
+                          errors++;
+                          errorDetails.push(`س${q.id} (أجاب: ${studentAns || 'فارغ'} - الصحيح: ${q.correctAnswer})`);
+                       }
+                    });
+                 }
+                 
+                 return (
+                   <div key={r.id} className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex flex-col gap-2">
+                     <div className="flex justify-between items-start">
+                       <div>
+                         <p className="font-bold text-white">{student?.name || 'غير معروف'}</p>
+                         <p className="text-xs text-slate-400 mt-1">{exam?.title || 'امتحان محذوف'}</p>
+                       </div>
+                       <div className="text-left">
+                         <p className={`font-black text-xl ${(r.category === 'Pass' || r.category === 'Perfect') ? 'text-emerald-500' : 'text-red-500'}`}>{r.score} / {exam?.questions?.length || 0}</p>
+                       </div>
+                     </div>
+                     <div className="flex flex-wrap gap-2 text-sm mt-1">
+                        <span className="bg-emerald-900/30 text-emerald-400 border border-emerald-800 px-2 py-1 rounded">إجابات صحيحة: {correct}</span>
+                        <span className="bg-red-900/30 text-red-400 border border-red-800 px-2 py-1 rounded">أخطاء: {errors}</span>
+                     </div>
+                     {errorDetails.length > 0 && (
+                        <div className="text-xs text-slate-400 mt-1">
+                          <span className="font-bold">تفاصيل الأخطاء: </span>
+                          {errorDetails.join('، ')}
+                        </div>
+                     )}
+                   </div>
+                 );
+               })}
+               {filteredResults.length === 0 && (
+                  <p className="text-center text-slate-500 py-6">لم يتم العثور على أي نتائج ممسوحة.</p>
+               )}
+               {filteredResults.length > visibleResults && (
+                  <div className="text-center pt-2">
+                    <button onClick={() => setVisibleResults(v => v + 5)} className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-full transition-colors border border-slate-700 text-sm">
+                      عرض المزيد
+                    </button>
+                  </div>
+               )}
+            </div>
+          </div>
         </div>
       )}
 
@@ -355,7 +457,7 @@ export default function ScannerTab() {
                     </div>
                     <div className="h-12 w-px bg-slate-700"></div>
                     <div className="text-center">
-                      <p className={`text-4xl font-black ${finalScore.category === 'مكمل' ? 'text-emerald-500' : 'text-red-500'}`} dir="ltr">{finalScore.percentage}%</p>
+                      <p className={`text-4xl font-black ${(finalScore.category === 'Pass' || finalScore.category === 'Perfect') ? 'text-emerald-500' : 'text-red-500'}`} dir="ltr">{finalScore.percentage}%</p>
                       <p className="text-sm text-slate-500 uppercase tracking-widest">{getCategoryLabel(finalScore.category)}</p>
                     </div>
                   </div>
@@ -366,6 +468,38 @@ export default function ScannerTab() {
                       <span className="font-medium">اشتباه في الغش (تطابق الإجابات)</span>
                     </div>
                   )}
+
+                  <div className="bg-slate-900 rounded-xl p-4 mb-6 text-right">
+                    <div className="flex justify-around items-center mb-4 pb-4 border-b border-slate-700/50">
+                       <div className="text-center">
+                         <p className="text-2xl font-bold text-emerald-400">{finalScore.correctCount}</p>
+                         <p className="text-xs text-slate-400">الإجابات الصحيحة</p>
+                       </div>
+                       <div className="text-center">
+                         <p className="text-2xl font-bold text-red-400">{finalScore.wrongCount}</p>
+                         <p className="text-xs text-slate-400">الأخطاء</p>
+                       </div>
+                    </div>
+                    {finalScore.errors && finalScore.errors.length > 0 ? (
+                      <div>
+                        <p className="text-sm text-slate-300 font-bold mb-3">تفاصيل الأخطاء:</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {finalScore.errors.map((err, i) => (
+                            <div key={i} className="flex justify-between items-center bg-slate-800 p-2 rounded-lg text-sm border border-slate-700">
+                               <span className="text-slate-400">سؤال {err.number}</span>
+                               <div className="flex items-center gap-2">
+                                 <span className="text-red-400 line-through" dir="ltr">{err.selected}</span>
+                                 <span className="text-slate-500">{"->"}</span>
+                                 <span className="text-emerald-400 font-bold" dir="ltr">{err.correct}</span>
+                               </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-emerald-400 text-sm font-bold text-center">أحسنت! لا يوجد أخطاء.</p>
+                    )}
+                  </div>
                 </>
              ) : (
                 <div className="p-4 bg-slate-900 border border-slate-700 rounded-xl mt-4 mb-6">

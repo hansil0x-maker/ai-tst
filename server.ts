@@ -140,7 +140,7 @@ Ensure the output is clean JSON.`;
 
   app.post('/api/generate-exam', async (req, res) => {
     try {
-      const { prompt, content, files, pagesConfig } = req.body;
+      const { prompt, content, files, pagesConfig, referenceExams } = req.body;
       const apiKey = process.env.GEMINI_API_KEY || 'AIzaSyCeCKHPsR4A1mhYS4GG1kxx614Umm2FIbo';
       
       if (!apiKey) {
@@ -153,10 +153,15 @@ Ensure the output is clean JSON.`;
       if (pagesConfig === '2_pages_1_face') configPrompt = 'Generate around 40 well-distributed questions.';
       if (pagesConfig === '2_pages_2_faces') configPrompt = 'Generate around 80 comprehensive questions.';
 
+      let referencePrompt = '';
+      if (referenceExams && referenceExams.length > 0) {
+         referencePrompt = `\n\n=== EXAMPLES OF HIGH QUALITY PAST EXAMS (Rated 5 Stars by the user) ===\nUse these as a style and quality reference:\n${JSON.stringify(referenceExams, null, 2)}`;
+      }
+
       const ai = new GoogleGenAI({ apiKey });
       
       const fullPrompt = `You are an expert teacher. Generate a Multiple Choice Questions (MCQ) exam based on the provided content or files. This exam will be automatically printed on paper for students.
-${configPrompt}
+${configPrompt}${referencePrompt}
 
 Text Content:
 ${content || 'None'}
@@ -164,7 +169,7 @@ ${content || 'None'}
 Notes from teacher: ${prompt || 'None'}
 
 Please return ONLY a valid JSON object matching this structure:
-{ "questions": [ { "id": 1, "text": "Question text?", "options": {"A": "Opt1", "B": "Opt2", "C": "Opt3", "D": "Opt4"}, "correctAnswer": "A" } ] }
+{ "questions": [...], "aiComment": "A brief Arabic comment to the teacher regarding the generated exam's quality or coverage." }
 Make sure it is perfect JSON.`;
 
       const parts: any[] = [{ text: fullPrompt }];
@@ -188,6 +193,7 @@ Make sure it is perfect JSON.`;
           responseSchema: {
             type: Type.OBJECT,
             properties: {
+              aiComment: { type: Type.STRING },
               questions: {
                 type: Type.ARRAY,
                 items: {
@@ -211,7 +217,7 @@ Make sure it is perfect JSON.`;
                 }
               }
             },
-            required: ["questions"]
+            required: ["questions", "aiComment"]
           }
         }
       });
@@ -248,7 +254,7 @@ Make sure it is perfect JSON.`;
 
       const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
-        model: 'gemini-3.1-pro-preview',
+        model: 'gemini-2.5-flash',
         contents: prompt,
         config: {
           systemInstruction: 'You are a helpful AI assistant analyzing student performance.',

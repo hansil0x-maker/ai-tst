@@ -98,16 +98,26 @@ export default function CreateExamFlow({ onCancel, onComplete }: { onCancel: () 
     setIsGenerating(true);
     toast.loading('جاري توليد الامتحان عبر الذكاء الاصطناعي...', { id: 'generate' });
     try {
+      const referenceExams = pastExams.filter(e => e.rating === 5).slice(0, 3).map(e => ({
+         title: e.title,
+         subject: e.subject,
+         questions: e.questions,
+         ratingComment: e.ratingComment
+      }));
+      
       const res = await fetch('/api/generate-exam', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: notes, content: contentBlock, files, pagesConfig })
+        body: JSON.stringify({ prompt: notes, content: contentBlock, files, pagesConfig, referenceExams })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'فشل التوليد');
       
       if (data.questions && Array.isArray(data.questions)) {
         setGeneratedQuestions(data.questions);
+        if (data.aiComment) {
+          setAiComment(data.aiComment);
+        }
         setStep(2);
         toast.success('تم التوليد بنجاح', { id: 'generate' });
       } else {
@@ -258,7 +268,7 @@ export default function CreateExamFlow({ onCancel, onComplete }: { onCancel: () 
           </div>
 
           <div>
-            <label className="block text-sm text-slate-400 mb-1">ملاحظات إضافية (اختياري)</label>
+            <label className="block text-sm text-slate-400 mb-1">ملاحظات إضافية</label>
             <input type="text" value={notes} onChange={e=>setNotes(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none mb-3" placeholder="مثال: قم بإنشاء 10 أسئلة صعبة جداً..." />
             
             <div className="relative group">

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Home, FileText, Users, ScanLine, Settings, LogOut, Bell } from 'lucide-react';
+import toast from 'react-hot-toast';
 import Dashboard from './Dashboard';
 import Exams from './Exams';
 import ClassesStudents from './ClassesStudents';

@@ -22,6 +22,7 @@ export default function ClassesStudents() {
   const [visibleStudents, setVisibleStudents] = useState(10);
 
   const [aiAnalysis, setAiAnalysis] = useState<{classId: number, text: string, loading: boolean} | null>(null);
+  const [studentAiAnalysis, setStudentAiAnalysis] = useState<{studentId: number, text: string, loading: boolean} | null>(null);
 
   const addClass = async () => {
     if (!newClassName || !newClassSubj) {
@@ -98,6 +99,98 @@ export default function ClassesStudents() {
     }
   };
 
+  const runStudentAiAnalysis = async (studentObj: any) => {
+    setStudentAiAnalysis({ studentId: studentObj.id, text: '', loading: true });
+    try {
+      const studentResults = results.filter(r => r.studentId === studentObj.id);
+      const classObj = classes.find(c => c.id === studentObj.classId);
+      
+      const stats = {
+        studentName: studentObj.name,
+        className: classObj?.name || '',
+        subject: classObj?.subject || '',
+        examsCount: studentResults.length,
+        averageScore: studentResults.length > 0 ? studentResults.reduce((sum, r) => sum + r.score, 0) / studentResults.length : 0
+      };
+
+      const prompt = `أنت مساعد ذكاء اصطناعي لتقييم أداء الطلاب. قم بتحليل أداء هذا الطالب واقترح طريقة لمساعدته أو تشجيعه بناءً على درجاته.
+      بيانات الطالب:
+      - الاسم: ${stats.studentName}
+      - الصف والمادة: ${stats.className} - ${stats.subject}
+      - عدد الامتحانات التي قدمها: ${stats.examsCount}
+      - متوسط الدرجات: ${stats.averageScore.toFixed(1)} من 100
+      
+      اكتب تعليقاً مختصراً ومفيداً باللغة العربية (3 أسطر كحد أقصى) موجهاً للمعلم حول مستوى هذا الطالب.`;
+
+      const response = await fetch('/api/generate-recommendation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt })
+      });
+      if (!response.ok) throw new Error('Failed to generate recommendation');
+      const data = await response.json();
+      setStudentAiAnalysis({ studentId: studentObj.id, text: data.text, loading: false });
+    } catch (error) {
+      toast.error('فشل توليد التحليل');
+      setStudentAiAnalysis(null);
+    }
+  };
+
+  const renderClassStats = (cId: number) => {
+    const classExams = exams.filter(e => e.classId === cId);
+    const examIds = classExams.map(e => e.id);
+    const classResults = results.filter(r => examIds.includes(r.examId));
+    const classStudents = students.filter(s => s.classId === cId);
+    
+    if (classResults.length === 0) return null;
+
+    // Aggregate scores per student
+    const studentStats: Record<number, {totalScore: number, count: number, avg: number}> = {};
+    classResults.forEach(r => {
+       if (!studentStats[r.studentId]) studentStats[r.studentId] = { totalScore: 0, count: 0, avg: 0 };
+       studentStats[r.studentId].totalScore += r.percentage; // Use percentage for standard comparison
+       studentStats[r.studentId].count++;
+    });
+    
+    Object.values(studentStats).forEach(st => {
+       st.avg = st.totalScore / st.count;
+    });
+
+    const sortedStudents = classStudents.map(s => ({
+       ...s,
+       avg: studentStats[s.id || 0]?.avg || 0
+    })).filter(s => studentStats[s.id || 0]).sort((a, b) => b.avg - a.avg);
+
+    const top5 = sortedStudents.slice(0, 5);
+    const bottom5 = [...sortedStudents].reverse().slice(0, 5).filter(s => !top5.find(t => t.id === s.id));
+
+    return (
+      <div className="mt-4 pt-4 border-t border-slate-700/50">
+         <h4 className="text-sm font-bold text-slate-300 mb-2">إحصائيات الطلاب (أفضل 5 / يحتاجون مساعدة)</h4>
+         <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex-1 bg-emerald-900/20 p-3 rounded-lg border border-emerald-900/30">
+               <span className="text-xs font-bold text-emerald-400 mb-2 block">الطلاب الأوائل</span>
+               {top5.length > 0 ? top5.map((s, i) => (
+                 <div key={s.id} className="flex justify-between text-sm py-1 border-b border-emerald-900/30 last:border-0 text-emerald-100">
+                    <span>{i+1}. {s.name}</span>
+                    <span className="font-bold">{Math.round(s.avg)}%</span>
+                 </div>
+               )) : <span className="text-xs text-slate-500">لا توجد بيانات</span>}
+            </div>
+            <div className="flex-1 bg-red-900/20 p-3 rounded-lg border border-red-900/30">
+               <span className="text-xs font-bold text-red-400 mb-2 block">يحتاجون مساعدة</span>
+               {bottom5.length > 0 ? bottom5.map((s, i) => (
+                 <div key={s.id} className="flex justify-between text-sm py-1 border-b border-red-900/30 last:border-0 text-red-100">
+                    <span>{s.name}</span>
+                    <span className="font-bold">{Math.round(s.avg)}%</span>
+                 </div>
+               )) : <span className="text-xs text-slate-500">لا توجد بيانات</span>}
+            </div>
+         </div>
+      </div>
+    );
+  };
+
   const filteredClasses = classes.filter(c => c.name.includes(classFilter) || c.subject.includes(classFilter));
   const filteredStudents = students.filter(s => s.name.includes(studentFilter) || s.serialNumber.includes(studentFilter));
 
@@ -154,6 +247,8 @@ export default function ClassesStudents() {
                     {aiAnalysis.text}
                   </div>
                 )}
+                
+                {c.id && renderClassStats(c.id)}
               </div>
             </div>
           ))}
@@ -194,14 +289,34 @@ export default function ClassesStudents() {
           />
         </div>
 
-        <div className="space-y-2">
+        <div className="space-y-4">
           {filteredStudents.slice(0, visibleStudents).map(s => (
-            <div key={s.id} className="flex justify-between items-center bg-slate-800 p-4 rounded-xl border border-slate-700">
-              <div>
-                <p className="font-medium text-white">{s.name}</p>
-                <p className="text-sm text-slate-400">الصف: {classes.find(c=>c.id===s.classId)?.name || 'غير معروف'} | التسلسل: <span className="font-mono text-blue-400">{s.serialNumber}</span></p>
+            <div key={s.id} className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex flex-col gap-4">
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="font-bold text-lg text-white">{s.name}</p>
+                  <p className="text-sm text-slate-400">الصف: {classes.find(c=>c.id===s.classId)?.name || 'غير معروف'} | التسلسل: <span className="font-mono text-blue-400">{s.serialNumber}</span></p>
+                </div>
+                <button onClick={() => s.id && deleteStudent(s.id)} className="text-red-400 hover:text-red-300 p-2"><Trash2 size={20} /></button>
               </div>
-              <button onClick={() => s.id && deleteStudent(s.id)} className="text-red-400 hover:text-red-300 p-2"><Trash2 size={20} /></button>
+
+              <div className="pt-2 border-t border-slate-700">
+                <button 
+                  onClick={() => runStudentAiAnalysis(s)}
+                  disabled={studentAiAnalysis?.loading && studentAiAnalysis?.studentId === s.id}
+                  className="w-full flex justify-center items-center gap-2 bg-indigo-900/40 hover:bg-indigo-900/60 text-indigo-300 py-2 rounded-lg transition-colors text-sm border border-indigo-500/30"
+                >
+                  <BrainCircuit size={16} /> 
+                  {studentAiAnalysis?.loading && studentAiAnalysis?.studentId === s.id ? 'جاري التحليل...' : 'تحليل أداء الطالب عبر الذكاء الاصطناعي'}
+                </button>
+                
+                {studentAiAnalysis && studentAiAnalysis.studentId === s.id && !studentAiAnalysis.loading && (
+                  <div className="mt-3 p-3 bg-slate-900 rounded-lg text-sm text-slate-300 leading-relaxed border border-slate-700">
+                    <span className="text-indigo-400 font-bold block mb-1">توصية الذكاء الاصطناعي:</span>
+                    {studentAiAnalysis.text}
+                  </div>
+                )}
+              </div>
             </div>
           ))}
           {filteredStudents.length === 0 && <p className="text-slate-500 text-center py-4">لم يتم العثور على طلاب.</p>}

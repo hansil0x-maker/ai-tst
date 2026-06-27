@@ -12,9 +12,9 @@ export default function Dashboard() {
   const classes = useLiveQuery(() => db.classes.toArray()) || [];
   const results = useLiveQuery(() => db.results.toArray()) || [];
 
-  const [selectedClassId, setSelectedClassId] = useState<number>(0);
-  const [selectedExamId, setSelectedExamId] = useState<number>(0);
-  const [selectedSubject, setSelectedSubject] = useState<string>('All');
+  const [selectedClassIds, setSelectedClassIds] = useState<number[]>([]);
+  const [selectedExamIds, setSelectedExamIds] = useState<number[]>([]);
+  const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
   const [selectedYear, setSelectedYear] = useState<string>('All');
   const [activeList, setActiveList] = useState<'All'|'Fail'|'Pass'|'Perfect'>('All');
   const [visibleResults, setVisibleResults] = useState(10);
@@ -32,19 +32,19 @@ export default function Dashboard() {
     }
     
     // Subject Filter
-    if (selectedSubject !== 'All') {
-      const subjExams = exams.filter(e => e.subject === selectedSubject).map(e => e.id);
+    if (selectedSubjects.length > 0 && !selectedSubjects.includes('All')) {
+      const subjExams = exams.filter(e => selectedSubjects.includes(e.subject)).map(e => e.id);
       f = f.filter(r => subjExams.includes(r.examId));
     }
 
-    if (selectedExamId !== 0) f = f.filter(r => r.examId === selectedExamId);
-    if (selectedClassId !== 0) {
-      const classExams = exams.filter(e => e.classId === selectedClassId).map(e => e.id);
+    if (selectedExamIds.length > 0 && !selectedExamIds.includes(0)) f = f.filter(r => selectedExamIds.includes(r.examId));
+    if (selectedClassIds.length > 0 && !selectedClassIds.includes(0)) {
+      const classExams = exams.filter(e => selectedClassIds.includes(e.classId)).map(e => e.id);
       f = f.filter(r => classExams.includes(r.examId));
     }
     if (activeList !== 'All') f = f.filter(r => r.category === activeList);
     return f;
-  }, [results, exams, selectedExamId, selectedClassId, activeList, selectedYear, selectedSubject]);
+  }, [results, exams, selectedExamIds, selectedClassIds, activeList, selectedYear, selectedSubjects]);
 
   const filteredStudentsCount = useMemo(() => {
     let f = students;
@@ -52,19 +52,19 @@ export default function Dashboard() {
       const yearClasses = classes.filter(c => c.academicYear === selectedYear).map(c => c.id);
       f = f.filter(s => yearClasses.includes(s.classId));
     }
-    if (selectedClassId !== 0) {
-      f = f.filter(s => s.classId === selectedClassId);
+    if (selectedClassIds.length > 0 && !selectedClassIds.includes(0)) {
+      f = f.filter(s => selectedClassIds.includes(s.classId));
     }
     return f.length;
-  }, [students, classes, selectedYear, selectedClassId]);
+  }, [students, classes, selectedYear, selectedClassIds]);
 
   const filteredExamsCount = useMemo(() => {
     let f = exams;
     if (selectedYear !== 'All') f = f.filter(e => e.academicYear === selectedYear);
-    if (selectedSubject !== 'All') f = f.filter(e => e.subject === selectedSubject);
-    if (selectedClassId !== 0) f = f.filter(e => e.classId === selectedClassId);
+    if (selectedSubjects.length > 0 && !selectedSubjects.includes('All')) f = f.filter(e => selectedSubjects.includes(e.subject));
+    if (selectedClassIds.length > 0 && !selectedClassIds.includes(0)) f = f.filter(e => selectedClassIds.includes(e.classId));
     return f.length;
-  }, [exams, selectedYear, selectedSubject, selectedClassId]);
+  }, [exams, selectedYear, selectedSubjects, selectedClassIds]);
 
   const passed = filteredResults.filter(r => r.category === 'Pass' || r.category === 'Perfect').length;
   const cheated = filteredResults.filter(r => r.isCheatSuspected).length;
@@ -87,6 +87,56 @@ export default function Dashboard() {
       default: return cat;
     }
   };
+
+  const classPerformances = useMemo(() => {
+    const classMap = new Map();
+    filteredResults.forEach(r => {
+      const ex = exams.find(e => e.id === r.examId);
+      if (!ex) return;
+      const cId = ex.classId;
+      if (!classMap.has(cId)) {
+        classMap.set(cId, { classId: cId, studentScores: new Map() });
+      }
+      const sMap = classMap.get(cId).studentScores;
+      if (!sMap.has(r.studentId)) {
+        sMap.set(r.studentId, { totalPercentage: 0, count: 0 });
+      }
+      const sData = sMap.get(r.studentId);
+      sData.totalPercentage += r.percentage;
+      sData.count += 1;
+    });
+
+    const result: any[] = [];
+    classMap.forEach(v => {
+      const classObj = classes.find(c => c.id === v.classId);
+      if (!classObj) return;
+      
+      const studentAverages = Array.from(v.studentScores.entries()).map(([sId, data]: any) => {
+        const studentObj = students.find(s => s.id === sId);
+        return {
+          studentId: sId,
+          name: studentObj?.name || 'غير معروف',
+          average: data.totalPercentage / data.count
+        };
+      });
+
+      studentAverages.sort((a, b) => b.average - a.average);
+      
+      const top5 = studentAverages.slice(0, 5);
+      // bottom5 shouldn't include students already in top5
+      const bottom5 = studentAverages.slice(-5).reverse().filter(s => !top5.find(t => t.studentId === s.studentId));
+
+      result.push({
+        classId: v.classId,
+        className: classObj.name,
+        subject: classObj.subject,
+        top5,
+        bottom5
+      });
+    });
+
+    return result;
+  }, [filteredResults, exams, classes, students]);
 
   const exportToExcel = () => {
     if (filteredResults.length === 0) {
@@ -134,7 +184,7 @@ export default function Dashboard() {
   }, [filteredResults]);
 
   const barData = useMemo(() => {
-    if (selectedExamId !== 0) {
+    if (selectedExamIds.length === 1 && selectedExamIds[0] !== 0) {
       // Show distribution of scores for the exam
       const bins = {'0-20%':0, '21-40%':0, '41-60%':0, '61-80%':0, '81-100%':0};
       filteredResults.forEach(r => {
@@ -157,7 +207,7 @@ export default function Dashboard() {
       const ex = exams.find(e => e.id === Number(eId));
       return { name: ex?.title?.substring(0, 10) + '..' || 'Unknown', count: Math.round(d.sum / d.count) };
     });
-  }, [filteredResults, exams, selectedExamId]);
+  }, [filteredResults, exams, selectedExamIds]);
 
   return (
     <div className="space-y-6 pb-20">
@@ -242,17 +292,17 @@ export default function Dashboard() {
             <option value="All">كل الأعوام</option>
             {uniqueYears.map((y, i) => <option key={i} value={y as string}>{y as string}</option>)}
           </select>
-          <select value={selectedSubject} onChange={e=>setSelectedSubject(e.target.value)} className="bg-slate-900 border border-slate-600 rounded-lg p-3 text-white outline-none">
+          <select multiple value={selectedSubjects} onChange={e=>setSelectedSubjects(Array.from(e.target.selectedOptions, option => option.value))} className="bg-slate-900 border border-slate-600 rounded-lg p-3 text-white outline-none h-24">
             <option value="All">كل المواد</option>
             {uniqueSubjects.map((s, i) => <option key={i} value={s as string}>{s as string}</option>)}
           </select>
-          <select value={selectedClassId} onChange={e=>setSelectedClassId(Number(e.target.value))} className="bg-slate-900 border border-slate-600 rounded-lg p-3 text-white outline-none">
-            <option value={0}>كل الصفوف</option>
-            {classes.filter(c => selectedYear === 'All' || c.academicYear === selectedYear).filter(c => selectedSubject === 'All' || c.subject === selectedSubject).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          <select multiple value={selectedClassIds.map(String)} onChange={e=>setSelectedClassIds(Array.from(e.target.selectedOptions, option => Number(option.value)))} className="bg-slate-900 border border-slate-600 rounded-lg p-3 text-white outline-none h-24">
+            <option value="0">كل الصفوف</option>
+            {classes.filter(c => selectedYear === 'All' || c.academicYear === selectedYear).filter(c => selectedSubjects.includes('All') || selectedSubjects.length === 0 || selectedSubjects.includes(c.subject)).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
-          <select value={selectedExamId} onChange={e=>setSelectedExamId(Number(e.target.value))} className="bg-slate-900 border border-slate-600 rounded-lg p-3 text-white outline-none">
-            <option value={0}>كل الامتحانات</option>
-            {exams.filter(e => selectedYear === 'All' || e.academicYear === selectedYear).filter(e => selectedSubject === 'All' || e.subject === selectedSubject).filter(e => selectedClassId === 0 || e.classId === selectedClassId).map(e => <option key={e.id} value={e.id}>{e.title}</option>)}
+          <select multiple value={selectedExamIds.map(String)} onChange={e=>setSelectedExamIds(Array.from(e.target.selectedOptions, option => Number(option.value)))} className="bg-slate-900 border border-slate-600 rounded-lg p-3 text-white outline-none h-24">
+            <option value="0">كل الامتحانات</option>
+            {exams.filter(e => selectedYear === 'All' || e.academicYear === selectedYear).filter(e => selectedSubjects.includes('All') || selectedSubjects.length === 0 || selectedSubjects.includes(e.subject)).filter(e => selectedClassIds.includes(0) || selectedClassIds.length === 0 || selectedClassIds.includes(e.classId)).map(e => <option key={e.id} value={e.id}>{e.title}</option>)}
           </select>
         </div>
       </div>
@@ -306,6 +356,51 @@ export default function Dashboard() {
            )}
         </div>
       </div>
+
+      {classPerformances.length > 0 && (
+        <div className="space-y-6 pt-4">
+          <h2 className="text-xl font-bold text-white border-b border-slate-700 pb-2 flex items-center gap-2">
+            <Users size={20} /> أفضل 5 طلاب وأكثر 5 يحتاجون مساعدة
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {classPerformances.map((perf, idx) => (
+              <div key={idx} className="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden">
+                <div className="bg-slate-900/50 p-4 border-b border-slate-700">
+                  <h3 className="font-bold text-white">{perf.className}</h3>
+                  <p className="text-sm text-slate-400">{perf.subject}</p>
+                </div>
+                <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <h4 className="text-emerald-400 font-semibold mb-3 text-sm flex items-center gap-1"><CheckCircle size={14}/> الأفضل أداءً</h4>
+                    <div className="space-y-2">
+                      {perf.top5.map((s: any, i: number) => (
+                        <div key={i} className="flex justify-between items-center bg-slate-900/30 p-2 rounded-lg text-sm border border-slate-700/50">
+                           <span className="text-white truncate" title={s.name}>{s.name}</span>
+                           <span className="font-bold text-emerald-400 shrink-0" dir="ltr">{Math.round(s.average)}%</span>
+                        </div>
+                      ))}
+                      {perf.top5.length === 0 && <span className="text-slate-500 text-xs">لا يوجد بيانات</span>}
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="text-amber-400 font-semibold mb-3 text-sm flex items-center gap-1"><AlertTriangle size={14}/> بحاجة لمساعدة</h4>
+                    <div className="space-y-2">
+                      {perf.bottom5.map((s: any, i: number) => (
+                        <div key={i} className="flex justify-between items-center bg-slate-900/30 p-2 rounded-lg text-sm border border-slate-700/50">
+                           <span className="text-white truncate" title={s.name}>{s.name}</span>
+                           <span className="font-bold text-amber-400 shrink-0" dir="ltr">{Math.round(s.average)}%</span>
+                        </div>
+                      ))}
+                      {perf.bottom5.length === 0 && <span className="text-slate-500 text-xs">لا يوجد بيانات</span>}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
