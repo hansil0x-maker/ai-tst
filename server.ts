@@ -124,15 +124,20 @@ Ensure the output is clean JSON.`;
       });
 
       let rawText = response.text.trim();
-      if (rawText.startsWith('```')) {
-         rawText = rawText.replace(/^```json\s*/, '').replace(/^```\s*/, '').replace(/\s*```$/, '');
-      }
-      
       let json;
       try {
         json = JSON.parse(rawText);
-      } catch (e: any) {
-        throw new Error("استجابة غير متوقعة من الخادم: " + rawText.substring(0, 50));
+      } catch (e1) {
+        try {
+          const match = rawText.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
+          if (match) {
+            json = JSON.parse(match[0]);
+          } else {
+            throw new Error("No JSON structure found");
+          }
+        } catch (e2) {
+          throw new Error("استجابة غير متوقعة من الخادم: " + rawText.substring(0, 50));
+        }
       }
       
       res.json(json);
@@ -229,16 +234,21 @@ Make sure it is perfect JSON.`;
       if (!response.text) throw new Error("No text returned from Gemini");
       
       let rawText = response.text.trim();
-      if (rawText.startsWith('```')) {
-         rawText = rawText.replace(/^```json\s*/, '').replace(/^```\s*/, '').replace(/\s*```$/, '');
-      }
-      
       let json;
       try {
         json = JSON.parse(rawText);
-      } catch (parseErr) {
-        console.error("Failed to parse Gemini output:", parseErr, "\\nRAW OUTPUT:", rawText);
-        throw new Error("تنسيق JSON غير صالح من الذكاء الاصطناعي. الرجاء المحاولة مرة أخرى.");
+      } catch (e1) {
+        try {
+          const match = rawText.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
+          if (match) {
+            json = JSON.parse(match[0]);
+          } else {
+            throw new Error("No JSON structure found");
+          }
+        } catch (e2) {
+          console.error("Failed to parse Gemini output:", e2, "\nRAW OUTPUT:", rawText);
+          throw new Error("تنسيق JSON غير صالح من الذكاء الاصطناعي. الرجاء المحاولة مرة أخرى.");
+        }
       }
       
       res.json(json);
