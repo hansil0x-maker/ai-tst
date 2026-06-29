@@ -99,7 +99,7 @@ export default function SettingsTab() {
         </div>
 
         <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700 space-y-4">
-           <h3 className="font-medium text-lg text-white mb-2">النسخ الاحتياطي والاستعادة</h3>
+           <h3 className="font-medium text-lg text-white mb-2">النسخ الاحتياطي والاستعادة - الإصدار 1.1</h3>
            <p className="text-sm text-slate-400 mb-4">قم بتصدير جميع بياناتك بلا إنترنت كنسخة احتياطية آمنة (JSON). يمكنك استعادتها في أي وقت على هذا الجهاز أو غيره.</p>
            
            <div className="flex flex-col sm:flex-row gap-3">
