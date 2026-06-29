@@ -107,7 +107,7 @@ Return ONLY a valid JSON object matching this structure exactly:
 Where "serialNumber" is the string extracted from the paper, keys inside "answers" are sequential question numbers starting from 1 up to ${numQuestions}, and values are the detected answer ('A', 'B', 'C', 'D', 'INVALID', or 'EMPTY').`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-pro',
+        model: 'gemini-2.5-flash',
         contents: [
           { text: fullPrompt },
           { inlineData: { data: image, mimeType: 'image/jpeg' } }
@@ -148,7 +148,7 @@ Where "serialNumber" is the string extracted from the paper, keys inside "answer
       res.json(json);
     } catch (error: any) {
       console.error("AI Grading Error:", error);
-      res.status(500).json({ error: "فشل في تصحيح الورقة عبر الذكاء الاصطناعي." });
+      res.status(500).json({ error: "فشل في تصحيح الورقة عبر الذكاء الاصطناعي: " + (error.message || JSON.stringify(error)) });
     }
   });
 
