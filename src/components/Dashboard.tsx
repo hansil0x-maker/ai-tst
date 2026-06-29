@@ -18,6 +18,8 @@ export default function Dashboard() {
   const [selectedYear, setSelectedYear] = useState<string>('All');
   const [activeList, setActiveList] = useState<'All'|'Fail'|'Pass'|'Perfect'>('All');
   const [visibleResults, setVisibleResults] = useState(10);
+  const [performanceClassFilter, setPerformanceClassFilter] = useState<number>(0);
+  const [visiblePerformances, setVisiblePerformances] = useState<number>(4);
 
   const uniqueSubjects = useMemo(() => Array.from(new Set([...classes.map(c=>c.subject), ...exams.map(e=>e.subject)])), [classes, exams]);
   const uniqueYears = useMemo(() => Array.from(new Set([...classes.map(c=>c.academicYear), ...exams.map(e=>e.academicYear)])).filter(Boolean), [classes, exams]);
@@ -359,35 +361,44 @@ export default function Dashboard() {
 
       {classPerformances.length > 0 && (
         <div className="space-y-6 pt-4">
-          <h2 className="text-xl font-bold text-white border-b border-slate-700 pb-2 flex items-center gap-2">
-            <Users size={20} /> أفضل 5 طلاب وأكثر 5 يحتاجون مساعدة
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {classPerformances.map((perf, idx) => (
-              <div key={idx} className="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden">
-                <div className="bg-slate-900/50 p-4 border-b border-slate-700">
-                  <h3 className="font-bold text-white">{perf.className}</h3>
-                  <p className="text-sm text-slate-400">{perf.subject}</p>
-                </div>
-                <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-700 pb-2 gap-4">
+            <h2 className="text-xl font-bold text-white flex items-center gap-2">
+              <Users size={20} /> أفضل 5 طلاب وأكثر 5 يحتاجون مساعدة
+            </h2>
+            <select value={performanceClassFilter} onChange={e=>setPerformanceClassFilter(Number(e.target.value))} className="bg-slate-900 border border-slate-600 rounded-lg p-2 text-white outline-none text-sm min-w-[200px]">
+              <option value="0">كل الفصول</option>
+              {classes.map(c => <option key={c.id} value={c.id}>{c.name} ({c.subject})</option>)}
+            </select>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {classPerformances.filter(p => performanceClassFilter === 0 || p.classId === performanceClassFilter).slice(0, visiblePerformances).map((perf, idx) => (
+              <div key={idx} className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden text-sm">
+                <div className="bg-slate-900/50 p-3 border-b border-slate-700 flex justify-between items-center">
                   <div>
-                    <h4 className="text-emerald-400 font-semibold mb-3 text-sm flex items-center gap-1"><CheckCircle size={14}/> الأفضل أداءً</h4>
-                    <div className="space-y-2">
+                    <h3 className="font-bold text-white">{perf.className}</h3>
+                    <p className="text-xs text-slate-400">{perf.subject}</p>
+                  </div>
+                </div>
+                <div className="p-3 grid grid-cols-1 gap-4">
+                  <div>
+                    <h4 className="text-emerald-400 font-semibold mb-2 text-xs flex items-center gap-1"><CheckCircle size={12}/> الأفضل</h4>
+                    <div className="space-y-1">
                       {perf.top5.map((s: any, i: number) => (
-                        <div key={i} className="flex justify-between items-center bg-slate-900/30 p-2 rounded-lg text-sm border border-slate-700/50">
-                           <span className="text-white truncate" title={s.name}>{s.name}</span>
+                        <div key={i} className="flex justify-between items-center bg-slate-900/30 p-1.5 rounded text-xs border border-slate-700/50">
+                           <span className="text-white truncate max-w-[120px]" title={s.name}>{s.name}</span>
                            <span className="font-bold text-emerald-400 shrink-0" dir="ltr">{Math.round(s.average)}%</span>
                         </div>
                       ))}
                       {perf.top5.length === 0 && <span className="text-slate-500 text-xs">لا يوجد بيانات</span>}
                     </div>
                   </div>
-                  <div>
-                    <h4 className="text-amber-400 font-semibold mb-3 text-sm flex items-center gap-1"><AlertTriangle size={14}/> بحاجة لمساعدة</h4>
-                    <div className="space-y-2">
+                  <div className="border-t border-slate-700/50 pt-3">
+                    <h4 className="text-amber-400 font-semibold mb-2 text-xs flex items-center gap-1"><AlertTriangle size={12}/> بحاجة لمساعدة</h4>
+                    <div className="space-y-1">
                       {perf.bottom5.map((s: any, i: number) => (
-                        <div key={i} className="flex justify-between items-center bg-slate-900/30 p-2 rounded-lg text-sm border border-slate-700/50">
-                           <span className="text-white truncate" title={s.name}>{s.name}</span>
+                        <div key={i} className="flex justify-between items-center bg-slate-900/30 p-1.5 rounded text-xs border border-slate-700/50">
+                           <span className="text-white truncate max-w-[120px]" title={s.name}>{s.name}</span>
                            <span className="font-bold text-amber-400 shrink-0" dir="ltr">{Math.round(s.average)}%</span>
                         </div>
                       ))}
@@ -398,6 +409,13 @@ export default function Dashboard() {
               </div>
             ))}
           </div>
+          {classPerformances.filter(p => performanceClassFilter === 0 || p.classId === performanceClassFilter).length > visiblePerformances && (
+            <div className="text-center pt-2">
+              <button onClick={() => setVisiblePerformances(v => v + 6)} className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-full transition-colors border border-slate-700 text-sm shadow-lg">
+                إظهار المزيد من الفصول
+              </button>
+            </div>
+          )}
         </div>
       )}
 

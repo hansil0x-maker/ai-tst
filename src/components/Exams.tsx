@@ -13,10 +13,21 @@ export default function Exams() {
   const [isCreating, setIsCreating] = useState(false);
   const [viewExam, setViewExam] = useState<any>(null);
   const [visibleCount, setVisibleCount] = useState(5);
+  const [filterClass, setFilterClass] = useState<number>(0);
+  const [filterDay, setFilterDay] = useState<string>('All');
+
   const exams = useLiveQuery(() => db.exams.toArray()) || [];
   const classes = useLiveQuery(() => db.classes.toArray()) || [];
   const settings = useLiveQuery(() => db.settings.get(1));
   const results = useLiveQuery(() => db.results.toArray()) || [];
+
+  const uniqueDays = Array.from(new Set(exams.map(e => new Date(e.date).toLocaleDateString('ar-EG'))));
+
+  const filteredExams = exams.filter(e => {
+    if (filterClass !== 0 && e.classId !== filterClass) return false;
+    if (filterDay !== 'All' && new Date(e.date).toLocaleDateString('ar-EG') !== filterDay) return false;
+    return true;
+  });
 
   useEffect(() => {
     if (exams.length === 0) return;
@@ -204,14 +215,24 @@ export default function Exams() {
 
   return (
     <div className="space-y-6 pb-20">
-      <div className="flex justify-between items-center border-b border-slate-700 pb-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-700 pb-4 gap-4">
         <h2 className="text-2xl font-semibold">إدارة الامتحانات</h2>
-        <button onClick={() => setIsCreating(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 space-x-reverse transition-colors">
-          <Plus size={20} /> <span>امتحان ذكي جديد</span>
-        </button>
+        <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+          <select value={filterClass} onChange={e=>setFilterClass(Number(e.target.value))} className="bg-slate-900 border border-slate-600 rounded-lg p-2 text-white outline-none text-sm">
+            <option value="0">كل الفصول</option>
+            {classes.map(c => <option key={c.id} value={c.id}>{c.name} ({c.subject})</option>)}
+          </select>
+          <select value={filterDay} onChange={e=>setFilterDay(e.target.value)} className="bg-slate-900 border border-slate-600 rounded-lg p-2 text-white outline-none text-sm">
+            <option value="All">كل الأيام</option>
+            {uniqueDays.map(d => <option key={d} value={d}>{d}</option>)}
+          </select>
+          <button onClick={() => setIsCreating(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center justify-center space-x-2 space-x-reverse transition-colors">
+            <Plus size={20} /> <span>امتحان جديد</span>
+          </button>
+        </div>
       </div>
       <div className="space-y-4">
-        {exams.slice(0, visibleCount).map(exam => (
+        {filteredExams.slice(0, visibleCount).map(exam => (
           <div key={exam.id} className="bg-slate-800 p-5 rounded-2xl border border-slate-700 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
               <h3 className="text-xl font-bold text-white mb-1" dir="auto">{exam.title}</h3>
@@ -237,18 +258,17 @@ export default function Exams() {
             </div>
           </div>
         ))}
-        {exams.length > visibleCount && (
+        {filteredExams.length > visibleCount && (
           <div className="text-center pt-4">
             <button onClick={() => setVisibleCount(v => v + 5)} className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-full transition-colors border border-slate-700">
               عرض المزيد
             </button>
           </div>
         )}
-        {exams.length === 0 && (
+        {filteredExams.length === 0 && (
           <div className="text-center py-12 bg-slate-800/50 rounded-2xl border border-slate-700 border-dashed">
             <FileText size={48} className="mx-auto text-slate-500 mb-4" />
-            <p className="text-slate-400 text-lg">لم يتم توليد أي امتحانات بعد.</p>
-            <p className="text-slate-500 text-sm">انقر على "امتحان ذكي جديد" للبدء في توليد امتحان عبر الذكاء الاصطناعي.</p>
+            <p className="text-slate-400 text-lg">لم يتم العثور على امتحانات.</p>
           </div>
         )}
       </div>

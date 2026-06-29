@@ -76,7 +76,6 @@ async function startServer() {
       const ai = new GoogleGenAI({ apiKey });
             const fullPrompt = `You are an expert Optical Mark Recognition (OMR) system and exam grader. 
 I am providing you with an image of a student's multiple-choice exam answer sheet.
-The image might be a printed paper with ink marks, checkmarks, crosses, or shading over the options (A, B, C, D).
 
 Answer key (number of questions and correct answers):
 ${JSON.stringify(questions)}
@@ -85,12 +84,14 @@ Your task is to analyze the image and:
 1. Extract the student's Serial Number (الرقم التسلسلي) printed on the paper.
 2. Determine the student's selected answer for EACH question.
 
-STRICT GRADING RULES:
-1. Carefully observe the options (A, B, C, D) for each question. A student might shade, circle, put an 'X', or use any clear ink mark over an option.
-2. If the student clearly marked exactly ONE option, return that option (A, B, C, or D).
-3. If the student marked MORE THAN ONE option for the same question, return "INVALID".
-4. If the student did NOT mark ANY option for a question, return "EMPTY".
-5. If the mark is ambiguous, return "INVALID".
+STRICT GRADING RULES FOR OMR:
+1. To the right of each question, there are 4 circles arranged horizontally from left to right, representing options A, B, C, and D.
+2. A student selects an answer by shading, coloring, marking an X, or ticking inside one of these circles.
+3. IMPORTANT: If a circle is heavily shaded with ink, the letter inside it (A, B, C, or D) might be completely covered and invisible. You must identify the selected option based on the circle's position (1st circle = A, 2nd = B, 3rd = C, 4th = D from left to right).
+4. If exactly ONE circle is marked/shaded, return that option (A, B, C, or D).
+5. If MORE THAN ONE circle is marked for the same question, return "INVALID".
+6. If NO circle is marked, return "EMPTY".
+7. If the mark is ambiguous, return "INVALID".
 
 Return ONLY a valid JSON object matching this structure exactly:
 {
@@ -102,7 +103,7 @@ Return ONLY a valid JSON object matching this structure exactly:
   }
 }
 Where "serialNumber" is the string extracted from the paper, keys inside "answers" are question IDs, and values are the detected answer ('A', 'B', 'C', 'D', 'INVALID', or 'EMPTY').
-Ensure the output is clean JSON.`;
+Ensure the output is clean JSON. Do not include markdown code blocks.`;
 
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',

@@ -8,6 +8,7 @@ import { syncManager } from '../sync';
 export default function ScannerTab() {
   const exams = useLiveQuery(() => db.exams.toArray()) || [];
   const students = useLiveQuery(() => db.students.toArray()) || [];
+  const classes = useLiveQuery(() => db.classes.toArray()) || [];
   
   const results = useLiveQuery(() => db.results.toArray()) || [];
   
@@ -17,6 +18,7 @@ export default function ScannerTab() {
   const [filterClass, setFilterClass] = useState<number>(0);
   const [filterExam, setFilterExam] = useState<number>(0);
   const [visibleResults, setVisibleResults] = useState(5);
+  const [expandedResultId, setExpandedResultId] = useState<number | null>(null);
   
   const [scannedSerial, setScannedSerial] = useState('');
   const [currentStudent, setCurrentStudent] = useState<any>(null);
@@ -333,14 +335,11 @@ export default function ScannerTab() {
               <div className="flex gap-2">
                 <select value={filterClass} onChange={e=>setFilterClass(Number(e.target.value))} className="bg-slate-900 border border-slate-700 rounded-lg p-2 text-white outline-none text-sm">
                   <option value={0}>كل الصفوف</option>
-                  {Array.from(new Set(exams.map(e => e.classId))).map(cId => {
-                    // Quick hack to get class name, ideal would be to use `classes` from db but we don't have it imported here.
-                    return <option key={cId} value={cId}>صف {cId}</option>
-                  })}
+                  {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
                 <select value={filterExam} onChange={e=>setFilterExam(Number(e.target.value))} className="bg-slate-900 border border-slate-700 rounded-lg p-2 text-white outline-none text-sm">
                   <option value={0}>كل الامتحانات</option>
-                  {exams.map(e => <option key={e.id} value={e.id}>{e.title}</option>)}
+                  {exams.filter(e => filterClass === 0 || e.classId === filterClass).map(e => <option key={e.id} value={e.id}>{e.title}</option>)}
                 </select>
               </div>
             </div>
@@ -361,29 +360,31 @@ export default function ScannerTab() {
                           correct++;
                        } else {
                           errors++;
-                          errorDetails.push(`س${q.id} (أجاب: ${studentAns || 'فارغ'} - الصحيح: ${q.correctAnswer})`);
+                          errorDetails.push(`س${q.id} (أجاب: ${studentAns || 'فارغ'} -> الصحيح: ${q.correctAnswer})`);
                        }
                     });
                  }
                  
+                 const isExpanded = expandedResultId === r.id;
+                 
                  return (
-                   <div key={r.id} className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex flex-col gap-2">
-                     <div className="flex justify-between items-start">
+                   <div key={r.id} className="bg-slate-800 p-3 rounded-xl border border-slate-700 flex flex-col gap-2 transition-all cursor-pointer hover:bg-slate-700/50" onClick={() => setExpandedResultId(isExpanded ? null : (r.id || null))}>
+                     <div className="flex justify-between items-center">
                        <div>
-                         <p className="font-bold text-white">{student?.name || 'غير معروف'}</p>
-                         <p className="text-xs text-slate-400 mt-1">{exam?.title || 'امتحان محذوف'}</p>
+                         <p className="font-bold text-white text-sm">{student?.name || 'غير معروف'}</p>
+                         <p className="text-xs text-slate-400 truncate max-w-[150px]">{exam?.title || 'امتحان محذوف'}</p>
                        </div>
-                       <div className="text-left">
-                         <p className={`font-black text-xl ${(r.category === 'Pass' || r.category === 'Perfect') ? 'text-emerald-500' : 'text-red-500'}`}>{r.score} / {exam?.questions?.length || 0}</p>
+                       <div className="flex items-center gap-3">
+                         <div className="flex gap-1 text-xs">
+                           <span className="bg-emerald-900/30 text-emerald-400 border border-emerald-800 px-1.5 py-0.5 rounded" title="إجابات صحيحة">{correct}</span>
+                           <span className="bg-red-900/30 text-red-400 border border-red-800 px-1.5 py-0.5 rounded" title="أخطاء">{errors}</span>
+                         </div>
+                         <p className={`font-black text-lg ${(r.category === 'Pass' || r.category === 'Perfect') ? 'text-emerald-500' : 'text-red-500'}`}>{r.score} / {exam?.questions?.length || 0}</p>
                        </div>
                      </div>
-                     <div className="flex flex-wrap gap-2 text-sm mt-1">
-                        <span className="bg-emerald-900/30 text-emerald-400 border border-emerald-800 px-2 py-1 rounded">إجابات صحيحة: {correct}</span>
-                        <span className="bg-red-900/30 text-red-400 border border-red-800 px-2 py-1 rounded">أخطاء: {errors}</span>
-                     </div>
-                     {errorDetails.length > 0 && (
-                        <div className="text-xs text-slate-400 mt-1">
-                          <span className="font-bold">تفاصيل الأخطاء: </span>
+                     {isExpanded && errorDetails.length > 0 && (
+                        <div className="text-xs text-slate-400 mt-1 border-t border-slate-700 pt-2 pb-1">
+                          <span className="font-bold text-slate-300">تفاصيل الأخطاء: </span>
                           {errorDetails.join('، ')}
                         </div>
                      )}
@@ -391,7 +392,7 @@ export default function ScannerTab() {
                  );
                })}
                {filteredResults.length === 0 && (
-                  <p className="text-center text-slate-500 py-6">لم يتم العثور على أي نتائج ممسوحة.</p>
+                  <p className="text-center text-slate-500 py-6 text-sm">لم يتم العثور على أي نتائج ممسوحة.</p>
                )}
                {filteredResults.length > visibleResults && (
                   <div className="text-center pt-2">
