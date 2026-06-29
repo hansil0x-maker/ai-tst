@@ -37,6 +37,7 @@ export interface Exam {
   rating?: number;
   ratingComment?: string;
   academicYear?: string;
+  excludedStudents?: number[];
 }
 
 export interface Result {
@@ -50,12 +51,21 @@ export interface Result {
   isCheatSuspected: boolean;
 }
 
+export interface Analysis {
+  id?: number;
+  targetType: 'student' | 'class' | 'school';
+  targetId: number; // 0 for school
+  date: string;
+  text: string;
+}
+
 const db = new Dexie('ExamAppDB') as Dexie & {
   settings: EntityTable<Setting, 'id'>;
   classes: EntityTable<ClassEntity, 'id'>;
   students: EntityTable<Student, 'id'>;
   exams: EntityTable<Exam, 'id'>;
   results: EntityTable<Result, 'id'>;
+  analyses: EntityTable<Analysis, 'id'>;
 };
 
 db.version(1).stores({
@@ -75,6 +85,10 @@ db.version(2).stores({
     return tx.table('classes').toCollection().modify(c => { c.academicYear = c.academicYear || year; })
       .then(() => tx.table('exams').toCollection().modify(e => { e.academicYear = e.academicYear || year; }));
   });
+});
+
+db.version(3).stores({
+  analyses: '++id, targetType, targetId, date'
 });
 
 export { db };

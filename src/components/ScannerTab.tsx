@@ -66,16 +66,11 @@ export default function ScannerTab() {
   };
 
   const processImageBase64 = async (base64Data: string, exam: any, goResult: boolean) => {
-    const questionsKey = exam.questions.map((q: any) => ({
-      id: q.id,
-      correctAnswer: q.correctAnswer
-    }));
-
     try {
       const res = await fetch('/api/grade-exam', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image: base64Data, questions: questionsKey })
+        body: JSON.stringify({ image: base64Data, numQuestions: exam.questions.length })
       });
       
       const textResponse = await res.text();
@@ -211,7 +206,7 @@ export default function ScannerTab() {
     const errors: any[] = [];
     
     exam.questions.forEach((q: any, index: number) => {
-      const studentAns = answers[q.id.toString()];
+      const studentAns = answers[(index + 1).toString()];
       if (studentAns === q.correctAnswer) {
         score++;
       } else {
@@ -354,13 +349,13 @@ export default function ScannerTab() {
                  let correct = 0;
                  const errorDetails: string[] = [];
                  if (exam && exam.questions) {
-                    exam.questions.forEach((q: any) => {
-                       const studentAns = r.scannedAnswers[q.id.toString()];
+                    exam.questions.forEach((q: any, index: number) => {
+                       const studentAns = r.scannedAnswers[(index + 1).toString()] || r.scannedAnswers[index + 1] || r.scannedAnswers[q.id.toString()]; // Fallback for old records
                        if (studentAns === q.correctAnswer) {
                           correct++;
                        } else {
                           errors++;
-                          errorDetails.push(`س${q.id} (أجاب: ${studentAns || 'فارغ'} -> الصحيح: ${q.correctAnswer})`);
+                          errorDetails.push(`س${index + 1} (أجاب: ${studentAns || 'فارغ'} -> الصحيح: ${q.correctAnswer})`);
                        }
                     });
                  }
@@ -432,7 +427,7 @@ export default function ScannerTab() {
               </div>
               <input 
                 type="file" 
-                accept="image/*" 
+                accept="image/jpeg, image/png, image/jpg" 
                 multiple
                 className="hidden" 
                 onChange={handleCapturePaper}

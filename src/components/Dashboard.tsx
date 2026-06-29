@@ -1,16 +1,22 @@
 import { useState, useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
-import { Users, FileText, CheckCircle, AlertTriangle, Filter, Download, BarChart2 } from 'lucide-react';
+import { Users, FileText, CheckCircle, AlertTriangle, Filter, Download, BarChart2, BrainCircuit, Printer } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
 import toast from 'react-hot-toast';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 export default function Dashboard() {
   const students = useLiveQuery(() => db.students.toArray()) || [];
   const exams = useLiveQuery(() => db.exams.toArray()) || [];
   const classes = useLiveQuery(() => db.classes.toArray()) || [];
   const results = useLiveQuery(() => db.results.toArray()) || [];
+  const analyses = useLiveQuery(() => db.analyses.toArray()) || [];
+  const settings = useLiveQuery(() => db.settings.get(1));
+
+  const [aiAnalysis, setAiAnalysis] = useState<{text: string, loading: boolean} | null>(null);
 
   const [selectedClassId, setSelectedClassId] = useState<number>(0);
   const [selectedExamId, setSelectedExamId] = useState<number>(0);
@@ -140,6 +146,116 @@ export default function Dashboard() {
     return result;
   }, [filteredResults, exams, classes, students]);
 
+  const runSchoolAnalysis = async () => {
+    setAiAnalysis({ text: '', loading: true });
+    try {
+      const stats = {
+        totalStudents: students.length,
+        totalExams: exams.length,
+        totalResults: results.length,
+        passRate: results.length > 0 ? Math.round((results.filter(r => r.percentage >= 50).length / results.length) * 100) : 0,
+        averageScore: results.length > 0 ? Math.round(results.reduce((sum, r) => sum + r.percentage, 0) / results.length) : 0
+      };
+
+      const prompt = `أنت مساعد ذكاء اصطناعي خبير في تحليل البيانات التعليمية. قم بتقييم الأداء العام للمدرسة بناءً على هذه الإحصائيات:
+      - إجمالي الطلاب: ${stats.totalStudents}
+      - إجمالي الامتحانات: ${stats.totalExams}
+      - إجمالي أوراق العمل المصححة: ${stats.totalResults}
+      - نسبة النجاح العامة: ${stats.passRate}%
+      - متوسط درجات الطلاب: ${stats.averageScore}%
+      
+      اكتب تقريراً مدرسياً تحليلياً باللغة العربية (5 أسطر كحد أقصى) يعكس نقاط القوة والضعف وتوصيات للإدارة.`;
+
+      const response = await fetch('/api/generate-recommendation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt })
+      });
+      if (!response.ok) throw new Error('Failed');
+      const data = await response.json();
+      setAiAnalysis({ text: data.text, loading: false });
+      await db.analyses.add({
+        targetType: 'school',
+        targetId: 0,
+        date: new Date().toISOString(),
+        text: data.text
+      });
+      toast.success('تم إنشاء تحليل المدرسة وحفظه');
+    } catch (e) {
+      toast.error('حدث خطأ أثناء تحليل المدرسة');
+      setAiAnalysis(null);
+    }
+  };
+
+  const printSchoolReport = async () => {
+    const t = toast.loading('جاري تجهيز تقرير المدرسة...');
+    const printContainer = document.createElement('div');
+    printContainer.style.position = 'absolute';
+    printContainer.style.left = '-9999px';
+    printContainer.style.top = '0';
+    printContainer.style.width = '794px'; 
+    printContainer.style.backgroundColor = '#fff';
+    printContainer.style.color = '#000';
+    printContainer.dir = 'rtl';
+    printContainer.style.fontFamily = 'sans-serif';
+    document.body.appendChild(printContainer);
+
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    
+    const schoolAnalyses = analyses.filter(a => a.targetType === 'school').sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    const passRate = results.length > 0 ? Math.round((results.filter(r => r.percentage >= 50).length / results.length) * 100) : 0;
+    const avgScore = results.length > 0 ? Math.round(results.reduce((sum, r) => sum + r.percentage, 0) / results.length) : 0;
+
+    const html = `
+      <div style="width: 794px; min-height: 1123px; padding: 40px; box-sizing: border-box; background: white;">
+        <div style="text-align: center; border-bottom: 2px solid #000; padding-bottom: 20px; margin-bottom: 30px;">
+          <h1 style="font-size: 28px; margin: 0;">${settings?.schoolName || 'تقرير الأداء المدرسي'}</h1>
+          <p style="font-size: 18px; color: #555; margin: 10px 0 0 0;">العام الدراسي: ${settings?.academicYear || ''}</p>
+        </div>
+        
+        <div style="display: flex; justify-content: space-between; margin-bottom: 30px;">
+          <div style="border: 1px solid #ccc; padding: 15px; border-radius: 8px; width: 30%; text-align: center;">
+            <h3 style="margin: 0 0 5px 0; font-size: 16px; color: #555;">إجمالي الطلاب</h3>
+            <p style="margin: 0; font-size: 24px; font-weight: bold;">${students.length}</p>
+          </div>
+          <div style="border: 1px solid #ccc; padding: 15px; border-radius: 8px; width: 30%; text-align: center;">
+            <h3 style="margin: 0 0 5px 0; font-size: 16px; color: #555;">نسبة النجاح</h3>
+            <p style="margin: 0; font-size: 24px; font-weight: bold;">${passRate}%</p>
+          </div>
+          <div style="border: 1px solid #ccc; padding: 15px; border-radius: 8px; width: 30%; text-align: center;">
+            <h3 style="margin: 0 0 5px 0; font-size: 16px; color: #555;">متوسط الدرجات</h3>
+            <p style="margin: 0; font-size: 24px; font-weight: bold;">${avgScore}%</p>
+          </div>
+        </div>
+
+        <h2 style="font-size: 22px; border-bottom: 1px solid #ccc; padding-bottom: 10px; margin-bottom: 20px;">سجل تحليلات الإدارة (الذكاء الاصطناعي)</h2>
+        ${schoolAnalyses.length === 0 ? '<p>لا توجد تحليلات مسجلة.</p>' : schoolAnalyses.slice(0, 5).map(a => `
+          <div style="margin-bottom: 15px; background: #f9f9f9; padding: 15px; border-radius: 8px; border-right: 4px solid #4f46e5;">
+            <p style="margin: 0 0 5px 0; font-size: 12px; color: #888;">${new Date(a.date).toLocaleString('ar-EG')}</p>
+            <p style="margin: 0; font-size: 14px; line-height: 1.6;">${a.text}</p>
+          </div>
+        `).join('')}
+
+        <div style="margin-top: 50px; text-align: left; padding-left: 50px;">
+          <p style="font-size: 18px; margin: 0;">مدير النظام (${settings?.teacherName || ''})</p>
+          <div style="border-bottom: 1px solid #000; width: 200px; margin-top: 40px; display: inline-block;"></div>
+        </div>
+      </div>
+    `;
+
+    try {
+      printContainer.innerHTML = html;
+      const canvas = await html2canvas(printContainer.firstElementChild as HTMLElement, { scale: 2 });
+      pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, 210, 297);
+      pdf.save('school_report.pdf');
+      toast.success('تم إنشاء تقرير المدرسة بنجاح', { id: t });
+    } catch (e) {
+      toast.error('فشل الطباعة', { id: t });
+    } finally {
+      document.body.removeChild(printContainer);
+    }
+  };
+
   const exportToExcel = () => {
     if (filteredResults.length === 0) {
       toast.error('لا توجد بيانات لتصديرها');
@@ -213,13 +329,32 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6 pb-20">
-      <div className="flex justify-between items-center border-b border-slate-700 pb-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-700 pb-4 gap-4">
         <h2 className="text-2xl font-semibold">الإحصائيات والتقارير</h2>
-        <button onClick={exportToExcel} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 space-x-reverse transition-colors">
-          <Download size={18} /> <span className="hidden sm:inline">تصدير (Excel)</span>
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button 
+            onClick={runSchoolAnalysis} 
+            disabled={aiAnalysis?.loading}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 space-x-reverse transition-colors disabled:opacity-50"
+          >
+            <BrainCircuit size={18} /> <span className="hidden sm:inline">{aiAnalysis?.loading ? 'جاري التحليل...' : 'تحليل عام للمدرسة'}</span>
+          </button>
+          <button onClick={printSchoolReport} className="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg flex items-center space-x-2 space-x-reverse transition-colors">
+            <Printer size={18} /> <span className="hidden sm:inline">طباعة تقرير الإدارة</span>
+          </button>
+          <button onClick={exportToExcel} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 space-x-reverse transition-colors">
+            <Download size={18} /> <span className="hidden sm:inline">تصدير (Excel)</span>
+          </button>
+        </div>
       </div>
       
+      {aiAnalysis?.text && (
+        <div className="bg-indigo-900/40 p-4 rounded-xl border border-indigo-500/30 text-indigo-100">
+          <h3 className="font-bold flex items-center gap-2 mb-2"><BrainCircuit size={18} className="text-indigo-400" /> تحليل الذكاء الاصطناعي الأخير</h3>
+          <p className="text-sm leading-relaxed">{aiAnalysis.text}</p>
+        </div>
+      )}
+
       {/* Top Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-slate-800 p-4 rounded-2xl border border-slate-700 flex flex-col items-center justify-center text-center">

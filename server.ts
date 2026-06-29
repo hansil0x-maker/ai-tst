@@ -66,8 +66,8 @@ async function startServer() {
 
   app.post('/api/grade-exam', async (req, res) => {
     try {
-      const { image, questions } = req.body;
-      const apiKey = process.env.GEMINI_API_KEY || 'AQ.Ab8RN6JPts6sUTq1bDfswFqrG5j2nL46al4rilG_rtgecM6tog';
+      const { image, numQuestions } = req.body;
+      const apiKey = process.env.GEMINI_API_KEY;
       
       if (!apiKey) {
         return res.status(500).json({ error: 'GEMINI_API_KEY is missing' });
@@ -77,21 +77,23 @@ async function startServer() {
             const fullPrompt = `You are an expert Optical Mark Recognition (OMR) system and exam grader. 
 I am providing you with an image of a student's multiple-choice exam answer sheet.
 
-Answer key (number of questions and correct answers):
-${JSON.stringify(questions)}
+There are exactly ${numQuestions} questions.
 
 Your task is to analyze the image and:
 1. Extract the student's Serial Number (الرقم التسلسلي) printed on the paper.
 2. Determine the student's selected answer for EACH question.
 
-STRICT GRADING RULES FOR OMR:
-1. To the right of each question, there are 4 circles arranged horizontally from left to right, representing options A, B, C, and D.
-2. A student selects an answer by shading, coloring, marking an X, or ticking inside one of these circles.
-3. IMPORTANT: If a circle is heavily shaded with ink, the letter inside it (A, B, C, or D) might be completely covered and invisible. You must identify the selected option based on the circle's position (1st circle = A, 2nd = B, 3rd = C, 4th = D from left to right).
-4. If exactly ONE circle is marked/shaded, return that option (A, B, C, or D).
-5. If MORE THAN ONE circle is marked for the same question, return "INVALID".
-6. If NO circle is marked, return "EMPTY".
-7. If the mark is ambiguous, return "INVALID".
+CRITICAL OMR RULES:
+1. The student marks their answer by shading, coloring, marking an X, or ticking inside one of the 4 circles next to each question.
+2. If a circle is heavily shaded or covered with dark ink, it IS the selected answer. Even if you cannot read the letter inside the circle because of the ink, determine its letter based on its position: 
+   - 1st circle from left = A
+   - 2nd circle from left = B
+   - 3rd circle from left = C
+   - 4th circle from left = D
+3. If exactly ONE circle is marked or shaded, return that option (A, B, C, or D).
+4. If MORE THAN ONE circle is marked or shaded for the same question, return "INVALID".
+5. If NO circle is marked, return "EMPTY".
+6. If the mark is ambiguous, return "INVALID".
 
 Return ONLY a valid JSON object matching this structure exactly:
 {
@@ -102,11 +104,10 @@ Return ONLY a valid JSON object matching this structure exactly:
     "3": "EMPTY"
   }
 }
-Where "serialNumber" is the string extracted from the paper, keys inside "answers" are question IDs, and values are the detected answer ('A', 'B', 'C', 'D', 'INVALID', or 'EMPTY').
-Ensure the output is clean JSON. Do not include markdown code blocks.`;
+Where "serialNumber" is the string extracted from the paper, keys inside "answers" are sequential question numbers starting from 1 up to ${numQuestions}, and values are the detected answer ('A', 'B', 'C', 'D', 'INVALID', or 'EMPTY').`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-2.5-pro',
         contents: [
           { text: fullPrompt },
           { inlineData: { data: image, mimeType: 'image/jpeg' } }
@@ -154,7 +155,7 @@ Ensure the output is clean JSON. Do not include markdown code blocks.`;
   app.post('/api/generate-exam', async (req, res) => {
     try {
       const { prompt, content, files, pagesConfig, referenceExams } = req.body;
-      const apiKey = process.env.GEMINI_API_KEY || 'AIzaSyCeCKHPsR4A1mhYS4GG1kxx614Umm2FIbo';
+      const apiKey = process.env.GEMINI_API_KEY;
       
       if (!apiKey) {
         return res.status(500).json({ error: 'GEMINI_API_KEY is missing' });
@@ -265,7 +266,7 @@ Make sure it is perfect JSON.`;
   app.post('/api/generate-recommendation', async (req, res) => {
     try {
       const { prompt } = req.body;
-      const apiKey = process.env.GEMINI_API_KEY || 'AIzaSyCeCKHPsR4A1mhYS4GG1kxx614Umm2FIbo';
+      const apiKey = process.env.GEMINI_API_KEY;
       if (!apiKey) {
         return res.status(500).json({ error: 'GEMINI_API_KEY is missing' });
       }

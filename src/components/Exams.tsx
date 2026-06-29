@@ -18,6 +18,7 @@ export default function Exams() {
 
   const exams = useLiveQuery(() => db.exams.toArray()) || [];
   const classes = useLiveQuery(() => db.classes.toArray()) || [];
+  const students = useLiveQuery(() => db.students.toArray()) || [];
   const settings = useLiveQuery(() => db.settings.get(1));
   const results = useLiveQuery(() => db.results.toArray()) || [];
 
@@ -67,8 +68,13 @@ export default function Exams() {
     
     if (diffDays < 0) {
       const examResults = results.filter(r => r.examId === exam.id);
-      if (examResults.length > 0) {
+      const classStudents = students.filter(s => s.classId === exam.classId && !exam.excludedStudents?.includes(s.id));
+      
+      if (examResults.length >= classStudents.length && classStudents.length > 0) {
         return <span className="flex items-center text-emerald-400 text-xs"><CheckCircle size={14} className="ml-1" /> بعد الامتحان (تم التصحيح)</span>;
+      } else if (examResults.length > 0) {
+        const remaining = classStudents.length - examResults.length;
+        return <span className="flex items-center text-blue-400 text-xs cursor-pointer hover:underline" onClick={() => promptExclude(exam)} title="انقر لاستثناء الطلاب المتبقين"><Clock size={14} className="ml-1" /> جاري التصحيح (متبقي ${remaining})</span>;
       } else {
         return <span className="flex items-center text-amber-400 text-xs"><Clock size={14} className="ml-1" /> بعد الامتحان (غير مصحح)</span>;
       }
@@ -78,6 +84,20 @@ export default function Exams() {
       return <span className="flex items-center text-blue-400 text-xs"><Clock size={14} className="ml-1" /> يوم الامتحان</span>;
     } else {
       return <span className="flex items-center text-slate-400 text-xs"><Clock size={14} className="ml-1" /> قبل الامتحان ({diffDays} أيام)</span>;
+    }
+  };
+
+  const promptExclude = async (exam: any) => {
+    const classStudents = students.filter(s => s.classId === exam.classId && !exam.excludedStudents?.includes(s.id));
+    const examResults = results.filter(r => r.examId === exam.id);
+    const unsubmitted = classStudents.filter(s => !examResults.some(r => r.studentId === s.id));
+    
+    if (unsubmitted.length > 0) {
+      if (confirm(`هناك ${unsubmitted.length} طلاب لم يتم تصحيح أوراقهم. هل تريد استثنائهم واعتبار الامتحان منتهياً؟`)) {
+        const newExcluded = [...(exam.excludedStudents || []), ...unsubmitted.map(s => s.id)];
+        await db.exams.update(exam.id, { excludedStudents: newExcluded });
+        toast.success('تم استثناء الطلاب واعتبار التصحيح مكتملاً.');
+      }
     }
   };
 
