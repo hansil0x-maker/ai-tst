@@ -29,7 +29,7 @@ export default function SettingsTab() {
         academicYear: academicYear || settings.academicYear 
       });
       if (newPassword.length >= 4) {
-        await db.settings.update(settings.id, { userPasswordHash: newPassword });
+        localStorage.setItem('nexus_user_pwd', newPassword);
         setNewPassword('');
         toast.success('تم تحديث كلمة المرور وحفظ الإعدادات!');
       } else if (newPassword.length > 0) {
@@ -91,7 +91,7 @@ export default function SettingsTab() {
           </div>
           <div className="pt-4 border-t border-slate-700">
              <label className="block text-sm text-slate-400 mb-1">تغيير كلمة المرور</label>
-             <input type="password" placeholder="السري الجديد..." value={newPassword} onChange={e=>setNewPassword(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none" />
+             <input type="password" placeholder="السري الجديد..." value={newPassword} onChange={e=>setNewPassword(e.target.value)} onPaste={e=>e.preventDefault()} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none" />
           </div>
           <button onClick={handleSave} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 rounded-xl flex items-center justify-center space-x-2 space-x-reverse transition-colors">
             <Save size={18} /> <span>حفظ التغييرات</span>
