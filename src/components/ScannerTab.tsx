@@ -81,12 +81,12 @@ export default function ScannerTab() {
       try {
         data = JSON.parse(textResponse);
       } catch (err) {
-        toast.error("خطأ في الخادم (قد تكون الصورة كبيرة جداً). " + textResponse.substring(0, 30));
+        toast.error("خطأ في الخادم (قد تكون الصورة غير واضحة).");
         return false;
       }
       
       if (!res.ok) {
-        toast.error(data.error || "حدث خطأ غير متوقع");
+        toast.error(data.error || "حدث خطأ غير متوقع في الخادم");
         return false;
       }
       
@@ -98,6 +98,16 @@ export default function ScannerTab() {
       if (data.serialNumber && data.answers) {
         const student = students.find(s => s.serialNumber === data.serialNumber);
         if (student) {
+          // Check for duplicate
+          const existing = await db.results.where({ examId: exam.id, studentId: student.id }).first();
+          if (existing) {
+            const confirmed = window.confirm(`لقد تم تصحيح هذا الامتحان للطالب ${student.name} مسبقاً (الدرجة السابقة: ${existing.percentage}%). هل تريد إعادة التصحيح واستبدال النتيجة؟`);
+            if (!confirmed) {
+              toast('تم تخطي الورقة.');
+              return false; // Skip
+            }
+          }
+
           toast.success(`تم التصحيح لـ: ${student.name}`);
           setCurrentStudent(student);
           setScannedSerial(data.serialNumber);
@@ -111,11 +121,11 @@ export default function ScannerTab() {
           toast.error(`لم يتم العثور على طالب بالرقم التسلسلي: ${data.serialNumber}`);
         }
       } else {
-        toast.error('حدث خطأ في التعرف على الإجابات أو الطالب');
+        toast.error('لم يتم التعرف على الإجابات بشكل صحيح، تأكد من وضوح الصورة ومطابقتها للنموذج.');
       }
     } catch (err) {
       console.error(err);
-      toast.error('حدث خطأ أثناء الاتصال بالخادم');
+      toast.error('حدث خطأ أثناء الاتصال بالخادم، تحقق من الاتصال بالانترنت.');
     }
     return false;
   };
@@ -142,7 +152,7 @@ export default function ScannerTab() {
     const base64Data = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
     
     setIsGrading(true);
-    await processImageBase64(base64Data, exam, false); // Don't redirect immediately for live capture
+    await processImageBase64(base64Data, exam, false); 
     setIsGrading(false);
   };
 
@@ -159,9 +169,16 @@ export default function ScannerTab() {
     if (!exam) return;
 
     setIsGrading(true);
-
+    
     let successCount = 0;
-    for (const file of files) {
+    const toastId = files.length > 1 ? toast.loading(`جاري تصحيح الورقة 1 من ${files.length}...`) : undefined;
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      if (files.length > 1 && toastId) {
+        toast.loading(`جاري تصحيح الورقة ${i + 1} من ${files.length}... (قد يستغرق بضع ثوان)`, { id: toastId });
+      }
+
       await new Promise<void>((resolve) => {
         const reader = new FileReader();
         reader.onload = async (ev) => {
@@ -177,6 +194,8 @@ export default function ScannerTab() {
     }
     
     setIsGrading(false);
+    if (toastId) toast.dismiss(toastId);
+
     if (files.length > 1) {
       toast.success(`تم تصحيح ${successCount} من ${files.length} بنجاح!`);
       setScanState('IDLE');
@@ -413,7 +432,6 @@ export default function ScannerTab() {
               <input 
                 type="file" 
                 accept="image/*" 
-                capture="environment" 
                 multiple
                 className="hidden" 
                 onChange={handleCapturePaper}

@@ -76,7 +76,9 @@ async function startServer() {
       const ai = new GoogleGenAI({ apiKey });
             const fullPrompt = `You are an expert Optical Mark Recognition (OMR) system and exam grader. 
 I am providing you with an image of a student's multiple-choice exam answer sheet.
-I am also providing you with the answer key (number of questions and correct answers):
+The image might be a printed paper with ink marks, checkmarks, crosses, or shading over the options (A, B, C, D).
+
+Answer key (number of questions and correct answers):
 ${JSON.stringify(questions)}
 
 Your task is to analyze the image and:
@@ -84,12 +86,13 @@ Your task is to analyze the image and:
 2. Determine the student's selected answer for EACH question.
 
 STRICT GRADING RULES:
-1. If the student bubbled/shaded exactly ONE option, return that option (A, B, C, or D).
-2. If the student bubbled/shaded MORE THAN ONE option for the same question, return "INVALID" (they get 0 points).
-3. If the student did NOT bubble/shade ANY option for a question, return "EMPTY" (they get 0 points).
-4. If the student wrote text or any answer other than properly shading the bubble, return "INVALID" (they get 0 points).
+1. Carefully observe the options (A, B, C, D) for each question. A student might shade, circle, put an 'X', or use any clear ink mark over an option.
+2. If the student clearly marked exactly ONE option, return that option (A, B, C, or D).
+3. If the student marked MORE THAN ONE option for the same question, return "INVALID".
+4. If the student did NOT mark ANY option for a question, return "EMPTY".
+5. If the mark is ambiguous, return "INVALID".
 
-Please return ONLY a valid JSON object matching this structure exactly:
+Return ONLY a valid JSON object matching this structure exactly:
 {
   "serialNumber": "student_serial_number_here",
   "answers": {

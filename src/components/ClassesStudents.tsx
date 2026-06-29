@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
-import { Plus, Trash2, Search, BrainCircuit } from 'lucide-react';
+import { Plus, Trash2, Search, BrainCircuit, X, BookOpen, GraduationCap, Calendar, BarChart2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function ClassesStudents() {
@@ -23,6 +23,9 @@ export default function ClassesStudents() {
 
   const [aiAnalysis, setAiAnalysis] = useState<{classId: number, text: string, loading: boolean} | null>(null);
   const [studentAiAnalysis, setStudentAiAnalysis] = useState<{studentId: number, text: string, loading: boolean} | null>(null);
+
+  const [selectedClassId, setSelectedClassId] = useState<number | null>(null);
+  const [selectedStudentId, setSelectedStudentId] = useState<number | null>(null);
 
   const addClass = async () => {
     if (!newClassName || !newClassSubj) {
@@ -196,8 +199,112 @@ export default function ClassesStudents() {
 
   const [activeTab, setActiveTab] = useState<'classes' | 'students'>('classes');
 
+  const renderStudentProfile = () => {
+    if (!selectedStudentId) return null;
+    const student = students.find(s => s.id === selectedStudentId);
+    if (!student) return null;
+    const studentClass = classes.find(c => c.id === student.classId);
+    const studentResults = results.filter(r => r.studentId === student.id);
+    const avgScore = studentResults.length > 0 
+      ? Math.round(studentResults.reduce((sum, r) => sum + r.percentage, 0) / studentResults.length) 
+      : 0;
+
+    return (
+      <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex justify-center items-center p-4">
+        <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl animate-in zoom-in-95 duration-200 p-6 space-y-6">
+          <div className="flex justify-between items-start">
+            <div>
+              <h2 className="text-2xl font-bold text-white flex items-center gap-2"><GraduationCap className="text-blue-500" /> {student.name}</h2>
+              <p className="text-slate-400 mt-1">الصف: {studentClass?.name || 'غير معروف'} | التسلسل: {student.serialNumber}</p>
+            </div>
+            <button onClick={() => setSelectedStudentId(null)} className="p-2 hover:bg-slate-800 rounded-full text-slate-400 hover:text-white transition-colors">
+              <X size={24} />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex flex-col items-center justify-center text-center">
+              <span className="text-slate-400 text-sm mb-1">الامتحانات المنجزة</span>
+              <span className="text-3xl font-bold text-white">{studentResults.length}</span>
+            </div>
+            <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex flex-col items-center justify-center text-center">
+              <span className="text-slate-400 text-sm mb-1">متوسط الدرجات</span>
+              <span className={`text-3xl font-bold ${avgScore >= 50 ? 'text-emerald-400' : 'text-red-400'}`}>{avgScore}%</span>
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-lg font-bold text-slate-200 mb-3 border-b border-slate-700 pb-2">سجل الامتحانات</h3>
+            <div className="space-y-3">
+              {studentResults.length === 0 ? (
+                <p className="text-slate-500 text-center py-4">لم ينجز أي امتحانات بعد.</p>
+              ) : (
+                studentResults.sort((a,b) => b.id! - a.id!).map(r => {
+                  const exam = exams.find(e => e.id === r.examId);
+                  return (
+                    <div key={r.id} className="bg-slate-800/50 p-3 rounded-lg border border-slate-700/50 flex justify-between items-center">
+                      <div>
+                        <p className="font-bold text-white">{exam?.name || 'امتحان محذوف'}</p>
+                        <p className="text-xs text-slate-400">{exam?.subject || ''}</p>
+                      </div>
+                      <div className="text-left">
+                        <span className={`font-bold text-lg ${r.percentage >= 50 ? 'text-emerald-400' : 'text-red-400'}`}>{r.percentage}%</span>
+                        <p className="text-xs text-slate-500">{r.score} من {exam?.questions.length || '?'}</p>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderClassProfile = () => {
+    if (!selectedClassId) return null;
+    const c = classes.find(c => c.id === selectedClassId);
+    if (!c) return null;
+    const classStudents = students.filter(s => s.classId === c.id);
+    const classExams = exams.filter(e => e.classId === c.id);
+    
+    return (
+      <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex justify-center items-center p-4">
+        <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl animate-in zoom-in-95 duration-200 p-6 space-y-6">
+          <div className="flex justify-between items-start">
+            <div>
+              <h2 className="text-2xl font-bold text-white flex items-center gap-2"><BookOpen className="text-blue-500" /> {c.name}</h2>
+              <p className="text-slate-400 mt-1">المادة: {c.subject} | عدد الطلاب: {classStudents.length}</p>
+            </div>
+            <button onClick={() => setSelectedClassId(null)} className="p-2 hover:bg-slate-800 rounded-full text-slate-400 hover:text-white transition-colors">
+              <X size={24} />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex flex-col items-center justify-center text-center">
+              <span className="text-slate-400 text-sm mb-1">إجمالي الطلاب</span>
+              <span className="text-3xl font-bold text-white">{classStudents.length}</span>
+            </div>
+            <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex flex-col items-center justify-center text-center">
+              <span className="text-slate-400 text-sm mb-1">الامتحانات المُنشأة</span>
+              <span className="text-3xl font-bold text-white">{classExams.length}</span>
+            </div>
+          </div>
+
+          <div>
+             {c.id && renderClassStats(c.id)}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6 pb-20">
+      {renderStudentProfile()}
+      {renderClassProfile()}
       
       {/* Tabs */}
       <div className="flex border-b border-slate-700">
@@ -241,10 +348,10 @@ export default function ClassesStudents() {
             {filteredClasses.slice(0, visibleClasses).map(c => (
               <div key={c.id} className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex flex-col gap-4">
                 <div className="flex justify-between items-start">
-                  <div>
-                    <p className="font-bold text-lg text-white">{c.name}</p>
+                  <button className="text-right hover:opacity-80 transition-opacity" onClick={() => c.id && setSelectedClassId(c.id)}>
+                    <p className="font-bold text-lg text-white hover:text-blue-400 transition-colors cursor-pointer">{c.name}</p>
                     <p className="text-sm text-blue-400">{c.subject}</p>
-                  </div>
+                  </button>
                   <button onClick={() => c.id && deleteClass(c.id)} className="text-red-400 hover:text-red-300 p-2"><Trash2 size={20} /></button>
                 </div>
                 
@@ -310,10 +417,10 @@ export default function ClassesStudents() {
             {filteredStudents.slice(0, visibleStudents).map(s => (
               <div key={s.id} className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex flex-col gap-4">
                 <div className="flex justify-between items-start">
-                  <div>
-                    <p className="font-bold text-lg text-white">{s.name}</p>
+                  <button className="text-right hover:opacity-80 transition-opacity" onClick={() => s.id && setSelectedStudentId(s.id)}>
+                    <p className="font-bold text-lg text-white hover:text-blue-400 transition-colors cursor-pointer">{s.name}</p>
                     <p className="text-sm text-slate-400">الصف: {classes.find(c=>c.id===s.classId)?.name || 'غير معروف'} | التسلسل: <span className="font-mono text-blue-400">{s.serialNumber}</span></p>
-                  </div>
+                  </button>
                   <button onClick={() => s.id && deleteStudent(s.id)} className="text-red-400 hover:text-red-300 p-2"><Trash2 size={20} /></button>
                 </div>
 
