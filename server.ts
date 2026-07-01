@@ -5,6 +5,7 @@ import { GoogleGenAI, Type } from '@google/genai';
 import dotenv from 'dotenv';
 import http from 'http';
 import { Server } from 'socket.io';
+import { gradeExamWithOMR } from './omr.ts';
 
 dotenv.config();
 
@@ -67,88 +68,11 @@ async function startServer() {
   app.post('/api/grade-exam', async (req, res) => {
     try {
       const { image, numQuestions } = req.body;
-      const apiKey = process.env.GEMINI_API_KEY;
-      
-      if (!apiKey) {
-        return res.status(500).json({ error: 'GEMINI_API_KEY is missing' });
-      }
-
-      const ai = new GoogleGenAI({ apiKey });
-            const fullPrompt = `You are an expert Optical Mark Recognition (OMR) system and exam grader. 
-I am providing you with an image of a student's multiple-choice exam answer sheet.
-
-There are exactly ${numQuestions} questions.
-
-Your task is to analyze the image and:
-1. Extract the student's Serial Number (الرقم التسلسلي) printed on the paper.
-2. Determine the student's selected answer for EACH question.
-
-CRITICAL OMR RULES:
-1. The student marks their answer by shading, coloring, marking an X, or ticking inside one of the 4 circles next to each question.
-2. If a circle is heavily shaded or covered with dark ink, it IS the selected answer. Even if you cannot read the letter inside the circle because of the ink, determine its letter based on its position: 
-   - 1st circle from left = A
-   - 2nd circle from left = B
-   - 3rd circle from left = C
-   - 4th circle from left = D
-3. If exactly ONE circle is marked or shaded, return that option (A, B, C, or D).
-4. If MORE THAN ONE circle is marked or shaded for the same question, return "INVALID".
-5. If NO circle is marked, return "EMPTY".
-6. If the mark is ambiguous, return "INVALID".
-
-Return ONLY a valid JSON object matching this structure exactly:
-{
-  "serialNumber": "student_serial_number_here",
-  "answers": {
-    "1": "A",
-    "2": "INVALID",
-    "3": "EMPTY"
-  }
-}
-Where "serialNumber" is the string extracted from the paper, keys inside "answers" are sequential question numbers starting from 1 up to ${numQuestions}, and values are the detected answer ('A', 'B', 'C', 'D', 'INVALID', or 'EMPTY').`;
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: [
-          { text: fullPrompt },
-          { inlineData: { data: image, mimeType: 'image/jpeg' } }
-        ],
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              serialNumber: { type: Type.STRING },
-              answers: {
-                type: Type.OBJECT,
-                additionalProperties: { type: Type.STRING }
-              }
-            },
-            required: ["serialNumber", "answers"]
-          }
-        }
-      });
-
-      let rawText = response.text.trim();
-      let json;
-      try {
-        json = JSON.parse(rawText);
-      } catch (e1) {
-        try {
-          const match = rawText.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
-          if (match) {
-            json = JSON.parse(match[0]);
-          } else {
-            throw new Error("No JSON structure found");
-          }
-        } catch (e2) {
-          throw new Error("استجابة غير متوقعة من الخادم: " + rawText.substring(0, 50));
-        }
-      }
-      
+      const json = await gradeExamWithOMR(image, numQuestions);
       res.json(json);
     } catch (error: any) {
       console.error("AI Grading Error:", error);
-      res.status(500).json({ error: "فشل في تصحيح الورقة عبر الذكاء الاصطناعي: " + (error.message || JSON.stringify(error)) });
+      res.status(500).json({ error: "فشل في تصحيح الورقة عبر OpenCV: " + (error.message || JSON.stringify(error)) });
     }
   });
 

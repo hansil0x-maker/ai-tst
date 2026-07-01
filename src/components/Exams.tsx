@@ -150,7 +150,13 @@ export default function Exams() {
           const pageQuestions = exam.questions.slice(pIdx * MAX_Q, (pIdx + 1) * MAX_Q);
           
           const pageHtml = `
-            <div class="page" style="width: 794px; min-height: 1123px; padding: 40px; box-sizing: border-box; background: white; display: flex; flex-direction: column;">
+            <div class="page" style="width: 794px; min-height: 1123px; padding: 60px; box-sizing: border-box; background: white; display: flex; flex-direction: column; position: relative;">
+              <!-- ANCHOR MARKS -->
+              <div style="position: absolute; top: 20px; left: 20px; width: 40px; height: 40px; background-color: black;"></div>
+              <div style="position: absolute; top: 20px; right: 20px; width: 40px; height: 40px; background-color: black;"></div>
+              <div style="position: absolute; bottom: 20px; left: 20px; width: 40px; height: 40px; background-color: black;"></div>
+              <div style="position: absolute; bottom: 20px; right: 20px; width: 40px; height: 40px; background-color: black;"></div>
+
               <div style="text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px;">
                 <div style="font-size: 24px; font-weight: bold;">${settings.schoolName || 'اسم المدرسة'}</div>
                 <div style="font-size: 14px; color: #555;">العام الدراسي: ${settings.academicYear || ''}</div>
