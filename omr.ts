@@ -76,6 +76,14 @@ export async function gradeExamWithOMR(imageBase64, numQuestions) {
   }
 
   let serialNumber = "UNKNOWN";
+  // 3. QR Code Detection
+  // Try original image first
+  const imgDataOriginal = new Uint8ClampedArray(image.bitmap.data);
+  const codeOriginal = jsQR(imgDataOriginal, image.bitmap.width, image.bitmap.height);
+  if (codeOriginal) {
+    serialNumber = codeOriginal.data;
+  }
+
   let answers = {};
   
   if (anchors.length === 4) {
@@ -111,12 +119,13 @@ export async function gradeExamWithOMR(imageBase64, numQuestions) {
     // Cleanup perspective mats
     srcTri.delete(); dstTri.delete(); M.delete();
 
-    // 3. QR Code Detection
-    // Extract RGBA array from warped for jsQR
-    const imgData = new Uint8ClampedArray(warped.data);
-    const code = jsQR(imgData, 794, 1123);
-    if (code) {
-      serialNumber = code.data;
+    // If original failed, try warped for QR code
+    if (!codeOriginal) {
+      const imgDataWarped = new Uint8ClampedArray(warped.data);
+      const codeWarped = jsQR(imgDataWarped, 794, 1123);
+      if (codeWarped) {
+        serialNumber = codeWarped.data;
+      }
     }
 
     // 4. Extract Answers using Adaptive Threshold

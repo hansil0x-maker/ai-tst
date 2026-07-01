@@ -355,6 +355,20 @@ export default function Dashboard() {
         </div>
       )}
 
+      {analyses.filter(a => a.targetType === 'school').length > 0 && !aiAnalysis?.text && (
+        <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700">
+           <h3 className="text-slate-300 font-medium mb-4 flex items-center gap-2"><BrainCircuit size={18}/> سجل تحليلات الذكاء الاصطناعي للمدرسة</h3>
+           <div className="space-y-4">
+             {analyses.filter(a => a.targetType === 'school').sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 3).map((a) => (
+               <div key={a.id} className="bg-slate-900/50 p-4 rounded-xl border border-slate-700">
+                 <div className="text-xs text-slate-500 mb-2">{new Date(a.date).toLocaleString('ar-EG')}</div>
+                 <p className="text-sm text-slate-300 leading-relaxed">{a.text}</p>
+               </div>
+             ))}
+           </div>
+        </div>
+      )}
+
       {/* Top Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-slate-800 p-4 rounded-2xl border border-slate-700 flex flex-col items-center justify-center text-center">
