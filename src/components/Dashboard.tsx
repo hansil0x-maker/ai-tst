@@ -364,30 +364,28 @@ export default function Dashboard() {
       )}
 
       {showAnalysisLog && (
-        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-800 rounded-2xl w-full max-w-2xl border border-slate-700 shadow-xl overflow-hidden flex flex-col max-h-[80vh]">
-            <div className="p-4 border-b border-slate-700 flex justify-between items-center bg-slate-800 shrink-0">
-              <h2 className="text-lg font-bold flex items-center gap-2">
-                <History size={20} className="text-indigo-400" />
-                سجل تحليلات الذكاء الاصطناعي
-              </h2>
-              <button onClick={() => setShowAnalysisLog(false)} className="text-slate-400 hover:text-white p-2 rounded-full hover:bg-slate-700 transition-colors">
-                <X size={20} />
-              </button>
-            </div>
-            
-            <div className="p-4 overflow-y-auto flex-1 space-y-4">
-              {analyses.filter(a => a.targetType === 'school').length === 0 ? (
-                 <p className="text-slate-500 text-center py-8">لا يوجد سجل للتحليلات بعد.</p>
-              ) : (
-                 analyses.filter(a => a.targetType === 'school').sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((a) => (
-                   <div key={a.id} className="bg-slate-900/50 p-4 rounded-xl border border-slate-700">
-                     <div className="text-xs text-slate-500 mb-2">{new Date(a.date).toLocaleString('ar-EG')}</div>
-                     <p className="text-sm text-slate-300 leading-relaxed">{a.text}</p>
-                   </div>
-                 ))
-              )}
-            </div>
+        <div className="bg-slate-800 rounded-2xl border border-slate-700 shadow-xl overflow-hidden flex flex-col mb-6">
+          <div className="p-4 border-b border-slate-700 flex justify-between items-center bg-slate-800/80 shrink-0">
+            <h2 className="text-lg font-bold flex items-center gap-2">
+              <History size={20} className="text-indigo-400" />
+              سجل تحليلات الذكاء الاصطناعي للمدرسة
+            </h2>
+            <button onClick={() => setShowAnalysisLog(false)} className="text-slate-400 hover:text-white p-2 rounded-full hover:bg-slate-700 transition-colors">
+              <X size={20} />
+            </button>
+          </div>
+          
+          <div className="p-4 overflow-y-auto max-h-80 space-y-4 bg-slate-900/20">
+            {analyses.filter(a => a.targetType === 'school').length === 0 ? (
+               <p className="text-slate-500 text-center py-8">لا يوجد سجل للتحليلات بعد.</p>
+            ) : (
+               analyses.filter(a => a.targetType === 'school').sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((a) => (
+                 <div key={a.id} className="bg-slate-900/50 p-4 rounded-xl border border-slate-700">
+                   <div className="text-xs text-slate-500 mb-2">{new Date(a.date).toLocaleString('ar-EG')}</div>
+                   <p className="text-sm text-slate-300 leading-relaxed">{a.text}</p>
+                 </div>
+               ))
+            )}
           </div>
         </div>
       )}

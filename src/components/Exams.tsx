@@ -122,118 +122,219 @@ export default function Exams() {
       return;
     }
 
-    const t = toast.loading('جاري تجهيز ملف الطباعة...');
+    const t = toast.loading('جاري تجهيز صفحات الطباعة...', { duration: 0 });
     
     try {
-      // Create a hidden container for rendering the pages
-      const printContainer = document.createElement('div');
-      printContainer.style.position = 'absolute';
-      printContainer.style.left = '-9999px';
-      printContainer.style.top = '0';
-      printContainer.style.width = '794px'; // A4 width at 96 DPI
-      printContainer.style.backgroundColor = '#fff';
-      printContainer.style.color = '#000';
-      printContainer.dir = 'rtl';
-      printContainer.style.fontFamily = 'sans-serif';
-      document.body.appendChild(printContainer);
+      const MAX_Q = 20;
+      const questionPagesCount = Math.ceil(exam.questions.length / MAX_Q) || 1;
+      
+      const printMode = exam.printMode || 'economic';
+      const printQuestionsPerStudent = exam.printQuestionsPerStudent ?? false;
+      const duplexQuestionPages = exam.duplexQuestionPages || 1;
 
-      const pdf = new jsPDF('p', 'mm', 'a4');
+      // 1. Generate Answer Sheet HTML for a student
+      const generateAnswerSheet = async (student: any) => {
+        const qrData = JSON.stringify({ examId: exam.id, studentId: student.id, serial: student.serialNumber });
+        const qrDataUrl = await QRCode.toDataURL(qrData, { margin: 1, width: 200, errorCorrectionLevel: 'H' });
+        
+        return `
+          <div class="page" style="width: 210mm; height: 296mm; padding: 15mm; box-sizing: border-box; background: white; display: flex; flex-direction: column; position: relative; page-break-after: always; break-after: page;">
+            <div style="text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px;">
+              <div style="font-size: 24px; font-weight: bold;">${settings.schoolName || 'اسم المدرسة'}</div>
+              <div style="font-size: 14px; color: #555;">العام الدراسي: ${settings.academicYear || ''}</div>
+              <div style="font-size: 18px; font-weight: bold; margin-top: 5px;">ورقة إجابة - ${exam.title}</div>
+            </div>
+            
+            <div style="display: flex; justify-content: space-between; margin-bottom: 30px; align-items: flex-start;">
+              <div style="flex: 1; font-size: 16px; line-height: 1.8;">
+                <div><strong>اسم الطالب:</strong> ${student.name}</div>
+                <div><strong>الصف:</strong> ${examClass.name}</div>
+                <div><strong>المادة:</strong> ${exam.subject}</div>
+                <div><strong>رقم الجلوس (التسلسلي):</strong> ${student.serialNumber}</div>
+              </div>
+              <div style="width: 150px; height: 150px; padding: 4px;">
+                <img src="${qrDataUrl}" width="100%" height="100%" style="display: block;" />
+              </div>
+            </div>
+            
+            <hr style="border: 0; border-bottom: 2px solid #000; margin-bottom: 30px;" />
+            
+            <div style="flex-grow: 1; display: grid; grid-template-columns: repeat(2, 1fr); gap: 40px; align-content: start;">
+              ${exam.questions.map((qInfo: any) => `
+                <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px dashed #ccc;">
+                  <div style="font-weight: bold; font-size: 18px; width: 40px;">${qInfo.id}.</div>
+                  <div style="display: flex; gap: 30px; direction: ltr;">
+                    <div style="width: 28px; height: 28px; border: 2px solid #000; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold;">A</div>
+                    <div style="width: 28px; height: 28px; border: 2px solid #000; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold;">B</div>
+                    <div style="width: 28px; height: 28px; border: 2px solid #000; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold;">C</div>
+                    <div style="width: 28px; height: 28px; border: 2px solid #000; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold;">D</div>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+            
+            <div style="position: absolute; bottom: 15mm; width: calc(100% - 30mm); text-align: center; font-size: 12px; color: #666;">
+              الرجاء تظليل الدائرة بالكامل باستخدام قلم حبر أو رصاص غامق. لا تستخدم علامة (✓) أو (✗).
+            </div>
+          </div>
+        `;
+      };
 
-      for (let i = 0; i < classStudents.length; i++) {
-        const student = classStudents[i];
-        const qrDataUrl = await QRCode.toDataURL(student.serialNumber, { margin: 1, width: 120 });
-
-        const MAX_Q = 20;
-        const totalPages = Math.ceil(exam.questions.length / MAX_Q) || 1;
-
-        for (let pIdx = 0; pIdx < totalPages; pIdx++) {
+      // 2. Generate Question Pages HTML
+      const generateQuestionPages = () => {
+        let pagesHtml = '';
+        for (let pIdx = 0; pIdx < questionPagesCount; pIdx++) {
           const pageQuestions = exam.questions.slice(pIdx * MAX_Q, (pIdx + 1) * MAX_Q);
-          
-          const pageHtml = `
-            <div class="page" style="width: 794px; min-height: 1123px; padding: 60px; box-sizing: border-box; background: white; display: flex; flex-direction: column; position: relative;">
-              <!-- ANCHOR MARKS -->
-              <div style="position: absolute; top: 20px; left: 20px; width: 40px; height: 40px; background-color: black;"></div>
-              <div style="position: absolute; top: 20px; right: 20px; width: 40px; height: 40px; background-color: black;"></div>
-              <div style="position: absolute; bottom: 20px; left: 20px; width: 40px; height: 40px; background-color: black;"></div>
-              <div style="position: absolute; bottom: 20px; right: 20px; width: 40px; height: 40px; background-color: black;"></div>
-
+          pagesHtml += `
+            <div class="page" style="width: 210mm; height: 296mm; padding: 15mm; box-sizing: border-box; background: white; position: relative; page-break-after: always; break-after: page;">
               <div style="text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px;">
-                <div style="font-size: 24px; font-weight: bold;">${settings.schoolName || 'اسم المدرسة'}</div>
-                <div style="font-size: 14px; color: #555;">العام الدراسي: ${settings.academicYear || ''}</div>
+                <div style="font-size: 20px; font-weight: bold;">ورقة الأسئلة - ${exam.title}</div>
+                <div style="font-size: 14px;">الصفحة ${pIdx + 1} من ${questionPagesCount}</div>
               </div>
-              
-              <div style="display: flex; justify-content: space-between; margin-bottom: 20px; align-items: flex-start;">
-                <div style="flex: 1; font-size: 16px; line-height: 1.8;">
-                  <div><strong>الطالب:</strong> ${student.name}</div>
-                  <div><strong>الصف:</strong> ${examClass.name}</div>
-                  <div><strong>الرقم التسلسلي:</strong> ${student.serialNumber}</div>
-                </div>
-                <div style="flex: 1; font-size: 16px; line-height: 1.8;">
-                  <div><strong>الامتحان:</strong> ${exam.title}</div>
-                  <div><strong>المادة:</strong> ${exam.subject}</div>
-                  <div><strong>التاريخ:</strong> ${new Date(exam.date).toLocaleDateString('ar-EG')}</div>
-                  <div><strong>الصفحة:</strong> ${pIdx + 1} / ${totalPages}</div>
-                </div>
-                <div style="width: 120px; height: 120px; border: 2px dashed #000; padding: 4px;">
-                  <img src="${qrDataUrl}" width="100%" height="100%" />
-                </div>
-              </div>
-              
-              <hr style="border: 0; border-bottom: 2px solid #000; margin-bottom: 30px;" />
-              
-              <div style="flex-grow: 1;">
+              <div>
                 ${pageQuestions.map((qInfo: any) => `
-                  <div style="margin-bottom: 25px; display: flex; align-items: flex-start; justify-content: space-between; page-break-inside: avoid;">
-                    <div style="flex: 1; margin-left: 20px;">
-                      <div style="font-weight: bold; margin-bottom: 10px; font-size: 16px;">${qInfo.id}. ${qInfo.text}</div>
-                      <div style="margin-right: 20px; font-size: 14px; line-height: 1.6; display: flex; flex-wrap: wrap; gap: 15px;">
-                        <div style="white-space: nowrap;">أ) ${qInfo.options.A || ''}</div>
-                        <div style="white-space: nowrap;">ب) ${qInfo.options.B || ''}</div>
-                        <div style="white-space: nowrap;">ج) ${qInfo.options.C || ''}</div>
-                        <div style="white-space: nowrap;">د) ${qInfo.options.D || ''}</div>
-                      </div>
-                    </div>
-                    <div style="display: flex; gap: 15px; direction: ltr; margin-top: 10px;">
-                      <div style="width: 25px; height: 25px; border: 2px solid #000; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold;">A</div>
-                      <div style="width: 25px; height: 25px; border: 2px solid #000; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold;">B</div>
-                      <div style="width: 25px; height: 25px; border: 2px solid #000; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold;">C</div>
-                      <div style="width: 25px; height: 25px; border: 2px solid #000; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold;">D</div>
+                  <div style="margin-bottom: 25px;">
+                    <div style="font-weight: bold; margin-bottom: 10px; font-size: 16px;">${qInfo.id}. ${qInfo.text}</div>
+                    <div style="font-size: 15px; line-height: 1.8;">
+                      <div>أ) ${qInfo.options.A || ''}</div>
+                      <div>ب) ${qInfo.options.B || ''}</div>
+                      <div>ج) ${qInfo.options.C || ''}</div>
+                      <div>د) ${qInfo.options.D || ''}</div>
                     </div>
                   </div>
                 `).join('')}
               </div>
             </div>
           `;
+        }
+        return pagesHtml;
+      };
 
-          printContainer.innerHTML = pageHtml;
-          
-          const canvas = await html2canvas(printContainer.firstElementChild as HTMLElement, {
-            scale: 2,
-            useCORS: true,
-            logging: false
-          });
-          
-          const imgData = canvas.toDataURL('image/png');
-          
-          if (i > 0 || pIdx > 0) {
-            pdf.addPage();
+      let finalHtml = '';
+
+      if (printMode === 'economic') {
+        for (let i = 0; i < classStudents.length; i++) {
+          finalHtml += await generateAnswerSheet(classStudents[i]);
+        }
+        if (printQuestionsPerStudent) {
+          for (let i = 0; i < classStudents.length; i++) {
+             finalHtml += generateQuestionPages();
           }
+        } else {
+          finalHtml += generateQuestionPages();
+        }
+      } 
+      else if (printMode === 'duplex') {
+        for (let i = 0; i < classStudents.length; i++) {
+          finalHtml += await generateAnswerSheet(classStudents[i]);
           
-          pdf.addImage(imgData, 'PNG', 0, 0, 210, 297);
+          let qHtml = '';
+          for (let pIdx = 0; pIdx < duplexQuestionPages; pIdx++) {
+             const pageQuestions = exam.questions.slice(pIdx * MAX_Q, (pIdx + 1) * MAX_Q);
+             if (pageQuestions.length > 0) {
+                qHtml += `
+                  <div class="page" style="width: 210mm; height: 296mm; padding: 15mm; box-sizing: border-box; background: white; position: relative; page-break-after: always; break-after: page;">
+                    <div style="text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px;">
+                      <div style="font-size: 20px; font-weight: bold;">ورقة الأسئلة - ${exam.title}</div>
+                      <div style="font-size: 14px;">الطالب: ${classStudents[i].name} - الصفحة ${pIdx + 1}</div>
+                    </div>
+                    <div>
+                      ${pageQuestions.map((qInfo: any) => `
+                        <div style="margin-bottom: 25px;">
+                          <div style="font-weight: bold; margin-bottom: 10px; font-size: 16px;">${qInfo.id}. ${qInfo.text}</div>
+                          <div style="font-size: 15px; line-height: 1.8;">
+                            <div>أ) ${qInfo.options.A || ''}</div>
+                            <div>ب) ${qInfo.options.B || ''}</div>
+                            <div>ج) ${qInfo.options.C || ''}</div>
+                            <div>د) ${qInfo.options.D || ''}</div>
+                          </div>
+                        </div>
+                      `).join('')}
+                    </div>
+                  </div>
+                `;
+             } else {
+                // blank page to keep duplex sync if needed
+                qHtml += `<div class="page" style="width: 210mm; height: 296mm; page-break-after: always; break-after: page;"></div>`;
+             }
+          }
+          finalHtml += qHtml;
+          
+          // Ensure student document total pages is even for duplex!
+          const totalStudentPages = 1 + duplexQuestionPages;
+          if (totalStudentPages % 2 !== 0) {
+            finalHtml += `<div class="page" style="width: 210mm; height: 296mm; page-break-after: always; break-after: page;"></div>`;
+          }
+        }
+      }
+      else if (printMode === 'booklet') {
+        // Simple sequential for now, the printer driver usually handles actual imposition
+        for (let i = 0; i < classStudents.length; i++) {
+          finalHtml += await generateAnswerSheet(classStudents[i]);
+          finalHtml += generateQuestionPages();
+          // Pad to multiple of 4 pages for booklet
+          const totalPages = 1 + questionPagesCount;
+          const remainder = totalPages % 4;
+          if (remainder !== 0) {
+            const paddingPages = 4 - remainder;
+            for (let p = 0; p < paddingPages; p++) {
+               finalHtml += `<div class="page" style="width: 210mm; height: 296mm; page-break-after: always; break-after: page;"></div>`;
+            }
+          }
         }
       }
 
-      pdf.save(`exam_${exam.title}.pdf`);
-      
-      toast.success('تم إنشاء ملف الطباعة بنجاح', { id: t });
+      const iframe = document.createElement('iframe');
+      iframe.style.position = 'fixed';
+      iframe.style.right = '0';
+      iframe.style.bottom = '0';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.style.border = 'none';
+      document.body.appendChild(iframe);
+
+      const iframeDoc = iframe.contentWindow?.document;
+      if (!iframeDoc) throw new Error('فشل إنشاء نافذة الطباعة');
+
+      iframeDoc.open();
+      iframeDoc.write(`
+        <!DOCTYPE html>
+        <html dir="rtl" lang="ar">
+        <head>
+          <meta charset="utf-8">
+          <title>طباعة امتحان - ${exam.title}</title>
+          <style>
+            @page { size: A4 portrait; margin: 0; }
+            body { margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; background: #eee; }
+            * { box-sizing: border-box; }
+            .page { background: white; margin: 0 auto; overflow: hidden; box-shadow: 0 0 5px rgba(0,0,0,0.1); }
+            @media print {
+              body { background: white; }
+              .page { margin: 0; box-shadow: none; }
+            }
+          </style>
+        </head>
+        <body>
+          ${finalHtml}
+        </body>
+        </html>
+      `);
+      iframeDoc.close();
+
+      iframe.onload = () => {
+        setTimeout(() => {
+          toast.dismiss(t);
+          iframe.contentWindow?.focus();
+          iframe.contentWindow?.print();
+          setTimeout(() => {
+            document.body.removeChild(iframe);
+          }, 1000);
+        }, 500);
+      };
+
     } catch (error) {
       console.error(error);
       toast.error('حدث خطأ أثناء تجهيز ملف الطباعة', { id: t });
-    } finally {
-      const container = document.querySelector('div[dir="rtl"][style*="-9999px"]');
-      if (container && container.parentNode) {
-        container.parentNode.removeChild(container);
-      }
     }
   };
 

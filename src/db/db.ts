@@ -38,6 +38,9 @@ export interface Exam {
   ratingComment?: string;
   academicYear?: string;
   excludedStudents?: number[];
+  printMode?: 'economic' | 'duplex' | 'booklet';
+  printQuestionsPerStudent?: boolean;
+  duplexQuestionPages?: number;
 }
 
 export interface Result {
@@ -89,6 +92,10 @@ db.version(2).stores({
 
 db.version(3).stores({
   analyses: '++id, targetType, targetId, date'
+});
+
+db.version(4).stores({
+  exams: '++id, title, date, classId, subject, status, academicYear' // no new indexed fields needed, but Dexie handles schema additions
 });
 
 export { db };

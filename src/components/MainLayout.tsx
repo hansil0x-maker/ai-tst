@@ -103,9 +103,14 @@ export default function MainLayout({ role, onLock }: { role: 'dashboard' | 'grad
           </button>
           
           <div className="relative">
-            <button onClick={() => setShowNotifications(!showNotifications)} className="hover:text-white transition-colors relative">
+            <button onClick={() => {
+                setShowNotifications(!showNotifications);
+                if (!showNotifications && notifications.length > 0) {
+                    setNotifications([]); // Clear on open
+                }
+              }} className="hover:text-white transition-colors relative">
               <Bell size={22} />
-              {notifications.length > 0 && (
+              {notifications.length > 0 && !showNotifications && (
                 <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center">
                   {notifications.length}
                 </span>
@@ -117,7 +122,6 @@ export default function MainLayout({ role, onLock }: { role: 'dashboard' | 'grad
                 <div className="p-3 border-b border-slate-700 flex justify-between items-center bg-slate-900/50">
                   <span className="font-bold text-sm text-white">الإشعارات</span>
                   <div className="flex gap-2">
-                    <button onClick={() => setNotifications([])} className="text-xs text-blue-400 hover:text-blue-300">مسح</button>
                     <button onClick={() => setShowNotifications(false)} className="text-slate-400 hover:text-white"><X size={16}/></button>
                   </div>
                 </div>

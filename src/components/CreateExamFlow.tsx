@@ -20,7 +20,9 @@ export default function CreateExamFlow({ onCancel, onComplete }: { onCancel: () 
   const [examDate, setExamDate] = useState(new Date().toISOString().split('T')[0]);
   const [notes, setNotes] = useState('');
   const [contentBlock, setContentBlock] = useState('');
-  const [pagesConfig, setPagesConfig] = useState('1_page_1_face');
+  const [printMode, setPrintMode] = useState<'economic'|'duplex'|'booklet'>('economic');
+  const [printQuestionsPerStudent, setPrintQuestionsPerStudent] = useState(false);
+  const [duplexQuestionPages, setDuplexQuestionPages] = useState(2);
   
   const [files, setFiles] = useState<{name: string, data: string, mimeType: string}[]>([]);
   
@@ -108,7 +110,7 @@ export default function CreateExamFlow({ onCancel, onComplete }: { onCancel: () 
       const res = await fetch('/api/generate-exam', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: notes, content: contentBlock, files, pagesConfig, referenceExams })
+        body: JSON.stringify({ prompt: notes, content: contentBlock, files, printMode, duplexQuestionPages, referenceExams })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'فشل التوليد');
@@ -187,7 +189,10 @@ export default function CreateExamFlow({ onCancel, onComplete }: { onCancel: () 
       status: 'Pending',
       rating,
       ratingComment,
-      academicYear: currentSettings?.academicYear || '2026-2027'
+      academicYear: currentSettings?.academicYear || '2026-2027',
+      printMode,
+      printQuestionsPerStudent,
+      duplexQuestionPages
     } as any);
     
     toast.success('تم اعتماد وحفظ الامتحان!');
@@ -257,14 +262,48 @@ export default function CreateExamFlow({ onCancel, onComplete }: { onCancel: () 
              </div>
           </div>
 
-          <div>
-            <label className="block text-sm text-slate-400 mb-1">تنسيق ورقة الامتحان</label>
-            <select value={pagesConfig} onChange={e=>setPagesConfig(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none">
-              <option value="1_page_1_face">ورقة واحدة - وجه واحد (حتى 20 سؤال)</option>
-              <option value="1_page_2_faces">ورقة واحدة - وجهين (حتى 40 سؤال)</option>
-              <option value="2_pages_1_face">ورقتان - وجه واحد لكل منهما (حتى 40 سؤال)</option>
-              <option value="2_pages_2_faces">ورقتان - وجهين (حتى 80 سؤال)</option>
-            </select>
+          <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700">
+            <h3 className="text-lg font-semibold mb-4 text-white">تنسيق طباعة الامتحان</h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm text-slate-400 mb-2">اختر طريقة الطباعة</label>
+                <select value={printMode} onChange={e=>setPrintMode(e.target.value as 'economic'|'duplex'|'booklet')} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none">
+                  <option value="economic">المنفصل (الاقتصادي) - ورقة إجابة منفصلة لكل طالب</option>
+                  <option value="duplex">الوجهين (Duplex) - ورقة الإجابة مع الأسئلة لكل طالب</option>
+                  <option value="booklet">الكُتيب (Booklet) - دفتر امتحاني مطوي</option>
+                </select>
+              </div>
+
+              {printMode === 'economic' && (
+                <div className="flex items-center gap-2 p-3 bg-slate-900 rounded-xl border border-slate-700">
+                  <input 
+                    type="checkbox" 
+                    id="printQs" 
+                    checked={printQuestionsPerStudent} 
+                    onChange={e => setPrintQuestionsPerStudent(e.target.checked)}
+                    className="w-4 h-4 text-blue-600 bg-slate-800 border-slate-600 rounded focus:ring-blue-500"
+                  />
+                  <label htmlFor="printQs" className="text-sm text-slate-300">
+                    هل تريد طباعة ورقة أسئلة مخصصة لكل طالب؟ (افتراضياً: تطبع مرة واحدة للمعلم)
+                  </label>
+                </div>
+              )}
+
+              {printMode === 'duplex' && (
+                <div>
+                  <label className="block text-sm text-slate-400 mb-2">عدد الأوجه المخصصة للأسئلة فقط</label>
+                  <select value={duplexQuestionPages} onChange={e=>setDuplexQuestionPages(Number(e.target.value))} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none">
+                    <option value={1}>وجه واحد للأسئلة (إجمالي ورقة واحدة وجه وظهر لكل طالب)</option>
+                    <option value={3}>3 أوجه للأسئلة (إجمالي ورقتين لكل طالب)</option>
+                    <option value={5}>5 أوجه للأسئلة (إجمالي 3 ورقات لكل طالب)</option>
+                  </select>
+                  <p className="text-xs text-slate-500 mt-2">
+                    ملاحظة: ورقة الإجابة ستكون دائماً هي الصفحة الأولى (الوجه الأول).
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
 
           <div>
