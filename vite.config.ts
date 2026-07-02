@@ -13,6 +13,7 @@ export default defineConfig(() => {
         registerType: 'autoUpdate',
         workbox: {
           navigateFallbackDenylist: [/^\/api/],
+          maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5MB limit
         },
         manifest: {
           name: 'AI Tests',

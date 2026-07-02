@@ -116,7 +116,10 @@ export default function MainLayout({ role, onLock }: { role: 'dashboard' | 'grad
               <div className="absolute top-10 left-0 w-64 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl overflow-hidden z-50">
                 <div className="p-3 border-b border-slate-700 flex justify-between items-center bg-slate-900/50">
                   <span className="font-bold text-sm text-white">الإشعارات</span>
-                  <button onClick={() => setShowNotifications(false)} className="text-slate-400 hover:text-white"><X size={16}/></button>
+                  <div className="flex gap-2">
+                    <button onClick={() => setNotifications([])} className="text-xs text-blue-400 hover:text-blue-300">مسح</button>
+                    <button onClick={() => setShowNotifications(false)} className="text-slate-400 hover:text-white"><X size={16}/></button>
+                  </div>
                 </div>
                 <div className="max-h-64 overflow-y-auto">
                   {notifications.length === 0 ? (

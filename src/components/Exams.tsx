@@ -141,7 +141,7 @@ export default function Exams() {
 
       for (let i = 0; i < classStudents.length; i++) {
         const student = classStudents[i];
-        const qrDataUrl = await QRCode.toDataURL(student.serialNumber, { margin: 1, width: 80 });
+        const qrDataUrl = await QRCode.toDataURL(student.serialNumber, { margin: 1, width: 120 });
 
         const MAX_Q = 20;
         const totalPages = Math.ceil(exam.questions.length / MAX_Q) || 1;
@@ -174,7 +174,7 @@ export default function Exams() {
                   <div><strong>التاريخ:</strong> ${new Date(exam.date).toLocaleDateString('ar-EG')}</div>
                   <div><strong>الصفحة:</strong> ${pIdx + 1} / ${totalPages}</div>
                 </div>
-                <div style="width: 80px; height: 80px; border: 2px dashed #000; padding: 4px;">
+                <div style="width: 120px; height: 120px; border: 2px dashed #000; padding: 4px;">
                   <img src="${qrDataUrl}" width="100%" height="100%" />
                 </div>
               </div>

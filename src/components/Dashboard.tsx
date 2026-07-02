@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
-import { Users, FileText, CheckCircle, AlertTriangle, Filter, Download, BarChart2, BrainCircuit, Printer } from 'lucide-react';
+import { Users, FileText, CheckCircle, AlertTriangle, Filter, Download, BarChart2, BrainCircuit, Printer, X, History } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
 import toast from 'react-hot-toast';
@@ -17,6 +17,7 @@ export default function Dashboard() {
   const settings = useLiveQuery(() => db.settings.get(1));
 
   const [aiAnalysis, setAiAnalysis] = useState<{text: string, loading: boolean} | null>(null);
+  const [showAnalysisLog, setShowAnalysisLog] = useState(false);
 
   const [selectedClassId, setSelectedClassId] = useState<number>(0);
   const [selectedExamId, setSelectedExamId] = useState<number>(0);
@@ -333,6 +334,13 @@ export default function Dashboard() {
         <h2 className="text-2xl font-semibold">الإحصائيات والتقارير</h2>
         <div className="flex flex-wrap gap-2">
           <button 
+            onClick={() => setShowAnalysisLog(true)} 
+            className="bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600/30 px-3 py-2 rounded-lg flex items-center space-x-2 space-x-reverse transition-colors"
+            title="سجل التحليلات"
+          >
+            <History size={18} />
+          </button>
+          <button 
             onClick={runSchoolAnalysis} 
             disabled={aiAnalysis?.loading}
             className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 space-x-reverse transition-colors disabled:opacity-50"
@@ -355,17 +363,32 @@ export default function Dashboard() {
         </div>
       )}
 
-      {analyses.filter(a => a.targetType === 'school').length > 0 && !aiAnalysis?.text && (
-        <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700">
-           <h3 className="text-slate-300 font-medium mb-4 flex items-center gap-2"><BrainCircuit size={18}/> سجل تحليلات الذكاء الاصطناعي للمدرسة</h3>
-           <div className="space-y-4">
-             {analyses.filter(a => a.targetType === 'school').sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 3).map((a) => (
-               <div key={a.id} className="bg-slate-900/50 p-4 rounded-xl border border-slate-700">
-                 <div className="text-xs text-slate-500 mb-2">{new Date(a.date).toLocaleString('ar-EG')}</div>
-                 <p className="text-sm text-slate-300 leading-relaxed">{a.text}</p>
-               </div>
-             ))}
-           </div>
+      {showAnalysisLog && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-800 rounded-2xl w-full max-w-2xl border border-slate-700 shadow-xl overflow-hidden flex flex-col max-h-[80vh]">
+            <div className="p-4 border-b border-slate-700 flex justify-between items-center bg-slate-800 shrink-0">
+              <h2 className="text-lg font-bold flex items-center gap-2">
+                <History size={20} className="text-indigo-400" />
+                سجل تحليلات الذكاء الاصطناعي
+              </h2>
+              <button onClick={() => setShowAnalysisLog(false)} className="text-slate-400 hover:text-white p-2 rounded-full hover:bg-slate-700 transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="p-4 overflow-y-auto flex-1 space-y-4">
+              {analyses.filter(a => a.targetType === 'school').length === 0 ? (
+                 <p className="text-slate-500 text-center py-8">لا يوجد سجل للتحليلات بعد.</p>
+              ) : (
+                 analyses.filter(a => a.targetType === 'school').sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((a) => (
+                   <div key={a.id} className="bg-slate-900/50 p-4 rounded-xl border border-slate-700">
+                     <div className="text-xs text-slate-500 mb-2">{new Date(a.date).toLocaleString('ar-EG')}</div>
+                     <p className="text-sm text-slate-300 leading-relaxed">{a.text}</p>
+                   </div>
+                 ))
+              )}
+            </div>
+          </div>
         </div>
       )}
 

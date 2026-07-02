@@ -84,49 +84,60 @@ export async function gradeExamWithOMR(imageBase64, numQuestions) {
     serialNumber = codeOriginal.data;
   }
 
-  let answers = {};
+  let answers: any = {};
   
-  if (anchors.length === 4) {
-    // Sort anchors into TL, TR, BL, BR
-    anchors.sort((a, b) => a.y - b.y); // top 2, bottom 2
-    const top = anchors.slice(0, 2).sort((a, b) => a.x - b.x);
-    const bottom = anchors.slice(2, 4).sort((a, b) => a.x - b.x);
-    
-    const srcTri = cv.matFromArray(4, 1, cv.CV_32FC2, [
-      top[0].x, top[0].y,
-      top[1].x, top[1].y,
-      bottom[0].x, bottom[0].y,
-      bottom[1].x, bottom[1].y
-    ]);
-    
-    // Exact centers based on the Exams.tsx layout
-    // Page: 794x1123.
-    // Top-Left: x=20, y=20, w=40, h=40 -> center (40, 40)
-    // Top-Right: x=734, y=20 -> center (754, 40)
-    // Bottom-Left: x=20, y=1063 -> center (40, 1083)
-    // Bottom-Right: x=734, y=1063 -> center (754, 1083)
-    const dstTri = cv.matFromArray(4, 1, cv.CV_32FC2, [
-      40, 40,
-      754, 40,
-      40, 1083,
-      754, 1083
-    ]);
+  if (anchors.length !== 4) {
+    src.delete(); gray.delete(); blurred.delete(); thresh.delete();
+    contours.delete(); hierarchy.delete();
+    throw new Error(`لم يتم العثور على زوايا الورقة الأربعة بشكل صحيح. تم العثور على ${anchors.length} زوايا فقط.`);
+  }
 
-    const M = cv.getPerspectiveTransform(srcTri, dstTri);
-    const warped = new cv.Mat();
-    cv.warpPerspective(src, warped, M, new cv.Size(794, 1123));
+  // Sort anchors into TL, TR, BL, BR
+  anchors.sort((a, b) => a.y - b.y); // top 2, bottom 2
+  const top = anchors.slice(0, 2).sort((a, b) => a.x - b.x);
+  const bottom = anchors.slice(2, 4).sort((a, b) => a.x - b.x);
+  
+  const srcTri = cv.matFromArray(4, 1, cv.CV_32FC2, [
+    top[0].x, top[0].y,
+    top[1].x, top[1].y,
+    bottom[0].x, bottom[0].y,
+    bottom[1].x, bottom[1].y
+  ]);
+  
+  // Exact centers based on the Exams.tsx layout
+  // Page: 794x1123.
+  // Top-Left: x=20, y=20, w=40, h=40 -> center (40, 40)
+  // Top-Right: x=734, y=20 -> center (754, 40)
+  // Bottom-Left: x=20, y=1063 -> center (40, 1083)
+  // Bottom-Right: x=734, y=1063 -> center (754, 1083)
+  const dstTri = cv.matFromArray(4, 1, cv.CV_32FC2, [
+    40, 40,
+    754, 40,
+    40, 1083,
+    754, 1083
+  ]);
 
-    // Cleanup perspective mats
-    srcTri.delete(); dstTri.delete(); M.delete();
+  const M = cv.getPerspectiveTransform(srcTri, dstTri);
+  const warped = new cv.Mat();
+  cv.warpPerspective(src, warped, M, new cv.Size(794, 1123));
 
-    // If original failed, try warped for QR code
-    if (!codeOriginal) {
-      const imgDataWarped = new Uint8ClampedArray(warped.data);
-      const codeWarped = jsQR(imgDataWarped, 794, 1123);
-      if (codeWarped) {
-        serialNumber = codeWarped.data;
-      }
+  // Cleanup perspective mats
+  srcTri.delete(); dstTri.delete(); M.delete();
+
+  // If original failed, try warped for QR code
+  if (!codeOriginal) {
+    const imgDataWarped = new Uint8ClampedArray(warped.data);
+    const codeWarped = jsQR(imgDataWarped, 794, 1123);
+    if (codeWarped) {
+      serialNumber = codeWarped.data;
     }
+  }
+
+  if (serialNumber === "UNKNOWN") {
+    warped.delete(); src.delete(); gray.delete(); blurred.delete(); thresh.delete();
+    contours.delete(); hierarchy.delete();
+    throw new Error("لم يتم العثور على رمز QR أو قراءته بشكل صحيح.");
+  }
 
     // 4. Extract Answers using Adaptive Threshold
     const warpedGray = new cv.Mat();
@@ -189,6 +200,14 @@ export async function gradeExamWithOMR(imageBase64, numQuestions) {
     // We only take up to numQuestions
     if (rows.length > numQuestions) {
       rows = rows.slice(0, numQuestions);
+    }
+
+    if (rows.length === 0) {
+      warped.delete(); warpedGray.delete(); warpedThresh.delete();
+      warpedEdges.delete(); warpedContours.delete(); warpedHierarchy.delete();
+      src.delete(); gray.delete(); blurred.delete(); thresh.delete();
+      contours.delete(); hierarchy.delete();
+      throw new Error("لم يتم العثور على خيارات الإجابة (الدوائر) في الورقة.");
     }
 
     // Fixed X coordinates based on layout
@@ -259,7 +278,6 @@ export async function gradeExamWithOMR(imageBase64, numQuestions) {
     warpedEdges.delete();
     warpedContours.delete();
     warpedHierarchy.delete();
-  }
 
   // Cleanup
   src.delete(); gray.delete(); blurred.delete(); thresh.delete();
