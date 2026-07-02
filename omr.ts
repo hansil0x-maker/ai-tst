@@ -134,38 +134,30 @@ export async function gradeExamWithOMR(imageBase64, numQuestions) {
     if (currentQ.length > 0) questions.push(currentQ);
   }
 
-  let minX = Infinity, maxX = -Infinity;
+  // 6. Sort into RTL Columns
+  const cols = [];
   for (const q of questions) {
-     if (q[0]) {
-         if (q[0].x < minX) minX = q[0].x;
-         if (q[q.length-1].x > maxX) maxX = q[q.length-1].x;
-     }
-  }
-  const midX = (minX + maxX) / 2;
-
-  const orderedQuestions = [];
-  questions.sort((a, b) => a[0].y - b[0].y);
-  let gridRows = [];
-  let curGridRow = [];
-  for (const q of questions) {
-     if (curGridRow.length === 0) {
-        curGridRow.push(q);
-     } else {
-        if (Math.abs(q[0].y - curGridRow[0][0].y) < 50) {
-           curGridRow.push(q);
-        } else {
-           gridRows.push(curGridRow);
-           curGridRow = [q];
+     let placed = false;
+     for (const col of cols) {
+        if (Math.abs(q[0].x - col[0][0].x) < 200) { // Using 200 to accommodate wide question columns
+           col.push(q);
+           placed = true;
+           break;
         }
      }
+     if (!placed) cols.push([q]);
   }
-  if (curGridRow.length > 0) gridRows.push(curGridRow);
 
-  for (const gr of gridRows) {
-      gr.sort((a, b) => b[0].x - a[0].x);
-      for (const q of gr) {
-         orderedQuestions.push(q);
-      }
+  // Sort columns Right-to-Left
+  cols.sort((a, b) => b[0][0].x - a[0][0].x);
+
+  const orderedQuestions = [];
+  for (const col of cols) {
+     // Sort questions within column Top-to-Bottom
+     col.sort((a, b) => a[0].y - b[0].y);
+     for (const q of col) {
+        orderedQuestions.push(q);
+     }
   }
 
   const finalQuestions = orderedQuestions.slice(0, numQuestions);

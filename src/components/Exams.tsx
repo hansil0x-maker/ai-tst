@@ -293,20 +293,13 @@ export default function Exams() {
         }
       }
 
-      const iframe = document.createElement('iframe');
-      iframe.style.position = 'fixed';
-      iframe.style.right = '0';
-      iframe.style.bottom = '0';
-      iframe.style.width = '0';
-      iframe.style.height = '0';
-      iframe.style.border = 'none';
-      document.body.appendChild(iframe);
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) {
+        toast.error('يرجى السماح بالنوافذ المنبثقة (Pop-ups) لطباعة الامتحان', { id: t });
+        return;
+      }
 
-      const iframeDoc = iframe.contentWindow?.document;
-      if (!iframeDoc) throw new Error('فشل إنشاء نافذة الطباعة');
-
-      iframeDoc.open();
-      iframeDoc.write(`
+      printWindow.document.write(`
         <!DOCTYPE html>
         <html dir="rtl" lang="ar">
         <head>
@@ -316,10 +309,10 @@ export default function Exams() {
             @page { size: A4 portrait; margin: 0mm; }
             body { margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; background: #eee; }
             * { box-sizing: border-box; }
-            .page { background: white; margin: 0 auto; overflow: hidden; box-shadow: 0 0 5px rgba(0,0,0,0.1); width: 210mm; }
+            .page { background: white; margin: 0 auto; overflow: hidden; box-shadow: 0 0 5px rgba(0,0,0,0.1); width: 210mm; min-height: 297mm; }
             @media print {
               body { background: white; }
-              .page { margin: 0; box-shadow: none; width: 100%; height: 100%; }
+              .page { margin: 0; box-shadow: none; width: 100%; height: 100%; page-break-after: always; }
             }
           </style>
         </head>
@@ -328,26 +321,13 @@ export default function Exams() {
         </body>
         </html>
       `);
-      iframeDoc.close();
+      printWindow.document.close();
 
-      iframe.onload = () => {
-        setTimeout(() => {
-          toast.dismiss(t);
-          
-          // Change document title temporarily for PDF saving name
-          const originalTitle = document.title;
-          document.title = `${exam.subject} - ${examClass?.name || ''}`;
-          
-          iframe.contentWindow?.focus();
-          iframe.contentWindow?.print();
-          
-          // Restore document title after print dialog closes/opens
-          setTimeout(() => {
-            document.title = originalTitle;
-            document.body.removeChild(iframe);
-          }, 1000);
-        }, 500);
-      };
+      setTimeout(() => {
+        toast.dismiss(t);
+        printWindow.focus();
+        printWindow.print();
+      }, 500);
 
     } catch (error) {
       console.error(error);
