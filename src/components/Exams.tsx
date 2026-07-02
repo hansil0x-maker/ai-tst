@@ -145,14 +145,23 @@ export default function Exams() {
               <div style="font-size: 18px; font-weight: bold; margin-top: 5px;">ورقة إجابة - ${exam.title}</div>
             </div>
             
-            <div style="display: flex; justify-content: space-between; margin-bottom: 30px; align-items: flex-start;">
-              <div style="flex: 1; font-size: 16px; line-height: 1.8;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 20px; align-items: flex-start; gap: 20px;">
+              <div style="flex: 1; font-size: 15px; line-height: 1.8;">
                 <div><strong>اسم الطالب:</strong> ${student.name}</div>
                 <div><strong>الصف:</strong> ${examClass.name}</div>
                 <div><strong>المادة:</strong> ${exam.subject}</div>
                 <div><strong>رقم الجلوس (التسلسلي):</strong> ${student.serialNumber}</div>
               </div>
-              <div style="width: 150px; height: 150px; padding: 4px;">
+              <div style="flex: 2; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 10px; font-size: 9pt; line-height: 1.5;">
+                <div style="font-weight: bold; margin-bottom: 4px;">📌 تعليمات هامة للإجابة:</div>
+                <ol style="margin: 0; padding-right: 20px;">
+                  <li>استخدم قلمًا جافًا أسود أو أزرق داكن لتظليل الإجابات، وتجنب الأقلام الباهتة.</li>
+                  <li>قم بتظليل الدائرة بالكامل بشكل مصمت (●)، ولا تضع مجرد علامة (✔) أو (✖).</li>
+                  <li>يحظر تظليل أكثر من دائرة لنفس السؤال، وفي حال تظليل دائرتين ستُلغى درجة السؤال تلقائياً.</li>
+                  <li>حافظ على نظافة الورقة تماماً، ويُمنع منعاً باتاً الطي أو الكتابة في منطقة رمز الـ QR أو مربعات الإجابة.</li>
+                </ol>
+              </div>
+              <div style="width: 140px; height: 140px; padding: 4px; shrink-0;">
                 <img src="${qrDataUrl}" width="100%" height="100%" style="display: block;" />
               </div>
             </div>
@@ -195,11 +204,11 @@ export default function Exams() {
                 ${pageQuestions.map((qInfo: any) => `
                   <div style="margin-bottom: 25px;">
                     <div style="font-weight: bold; margin-bottom: 10px; font-size: 16px;">${qInfo.id}. ${qInfo.text}</div>
-                    <div style="font-size: 15px; line-height: 1.8;">
-                      <div>أ) ${qInfo.options.A || ''}</div>
-                      <div>ب) ${qInfo.options.B || ''}</div>
-                      <div>ج) ${qInfo.options.C || ''}</div>
-                      <div>د) ${qInfo.options.D || ''}</div>
+                    <div style="font-size: 15px; line-height: 1.8; display: flex; gap: 20px; flex-wrap: wrap;">
+                      <div style="flex: 1; min-width: 150px;">أ) ${qInfo.options.A || ''}</div>
+                      <div style="flex: 1; min-width: 150px;">ب) ${qInfo.options.B || ''}</div>
+                      <div style="flex: 1; min-width: 150px;">ج) ${qInfo.options.C || ''}</div>
+                      <div style="flex: 1; min-width: 150px;">د) ${qInfo.options.D || ''}</div>
                     </div>
                   </div>
                 `).join('')}
@@ -242,11 +251,11 @@ export default function Exams() {
                       ${pageQuestions.map((qInfo: any) => `
                         <div style="margin-bottom: 25px;">
                           <div style="font-weight: bold; margin-bottom: 10px; font-size: 16px;">${qInfo.id}. ${qInfo.text}</div>
-                          <div style="font-size: 15px; line-height: 1.8;">
-                            <div>أ) ${qInfo.options.A || ''}</div>
-                            <div>ب) ${qInfo.options.B || ''}</div>
-                            <div>ج) ${qInfo.options.C || ''}</div>
-                            <div>د) ${qInfo.options.D || ''}</div>
+                          <div style="font-size: 15px; line-height: 1.8; display: flex; gap: 20px; flex-wrap: wrap;">
+                            <div style="flex: 1; min-width: 150px;">أ) ${qInfo.options.A || ''}</div>
+                            <div style="flex: 1; min-width: 150px;">ب) ${qInfo.options.B || ''}</div>
+                            <div style="flex: 1; min-width: 150px;">ج) ${qInfo.options.C || ''}</div>
+                            <div style="flex: 1; min-width: 150px;">د) ${qInfo.options.D || ''}</div>
                           </div>
                         </div>
                       `).join('')}
@@ -302,15 +311,15 @@ export default function Exams() {
         <html dir="rtl" lang="ar">
         <head>
           <meta charset="utf-8">
-          <title>طباعة امتحان - ${exam.title}</title>
+          <title>${exam.subject} - ${examClass?.name || ''}</title>
           <style>
-            @page { size: A4 portrait; margin: 0; }
+            @page { size: A4 portrait; margin: 0mm; }
             body { margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; background: #eee; }
             * { box-sizing: border-box; }
-            .page { background: white; margin: 0 auto; overflow: hidden; box-shadow: 0 0 5px rgba(0,0,0,0.1); }
+            .page { background: white; margin: 0 auto; overflow: hidden; box-shadow: 0 0 5px rgba(0,0,0,0.1); width: 210mm; }
             @media print {
               body { background: white; }
-              .page { margin: 0; box-shadow: none; }
+              .page { margin: 0; box-shadow: none; width: 100%; height: 100%; }
             }
           </style>
         </head>
@@ -324,9 +333,17 @@ export default function Exams() {
       iframe.onload = () => {
         setTimeout(() => {
           toast.dismiss(t);
+          
+          // Change document title temporarily for PDF saving name
+          const originalTitle = document.title;
+          document.title = `${exam.subject} - ${examClass?.name || ''}`;
+          
           iframe.contentWindow?.focus();
           iframe.contentWindow?.print();
+          
+          // Restore document title after print dialog closes/opens
           setTimeout(() => {
+            document.title = originalTitle;
             document.body.removeChild(iframe);
           }, 1000);
         }, 500);
