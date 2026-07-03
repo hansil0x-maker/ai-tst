@@ -362,7 +362,7 @@ export default function LockScreen({
         )}
       </div>
       <div className="absolute bottom-6 left-0 right-0 text-center text-slate-500 text-sm font-mono">
-        التحديث: 1.3.0 - الرمز الشريطي والطباعة المحسنة
+        التحديث: 1.2.1 - الرمز الشريطي والطباعة المحسنة
       </div>
     </div>
   );
