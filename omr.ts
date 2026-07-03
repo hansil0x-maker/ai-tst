@@ -1,6 +1,6 @@
-import cvInit from '@techstark/opencv-js';
-import { Jimp } from 'jimp';
-import jsQR from 'jsqr';
+import cvInit from "@techstark/opencv-js";
+import { Jimp } from "jimp";
+import jsQR from "jsqr";
 
 let cv = null;
 
@@ -13,26 +13,32 @@ async function initCV() {
 
 export async function gradeExamWithOMR(imageBase64, numQuestions) {
   const cv = await initCV();
-  
+
   // 1. Decode base64 image
   const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
-  const buffer = Buffer.from(base64Data, 'base64');
+  const buffer = Buffer.from(base64Data, "base64");
   const image = await Jimp.read(buffer);
-  
+
   // Create cv.Mat from Jimp image
   const src = cv.matFromImageData({
     width: image.bitmap.width,
     height: image.bitmap.height,
-    data: image.bitmap.data
+    data: image.bitmap.data,
   });
 
   // 2. QR Code Detection
   const imgDataOriginal = new Uint8ClampedArray(image.bitmap.data);
-  const codeOriginal = jsQR(imgDataOriginal, image.bitmap.width, image.bitmap.height);
-  
+  const codeOriginal = jsQR(
+    imgDataOriginal,
+    image.bitmap.width,
+    image.bitmap.height,
+  );
+
   if (!codeOriginal) {
     src.delete();
-    throw new Error("لم يتم العثور على رمز QR في الصورة. يرجى التأكد من وضوح الصورة وأن الرمز ظاهر بالكامل.");
+    throw new Error(
+      "لم يتم العثور على رمز QR في الصورة. يرجى التأكد من وضوح الصورة وأن الرمز ظاهر بالكامل.",
+    );
   }
 
   // Parse QR Data
@@ -42,64 +48,93 @@ export async function gradeExamWithOMR(imageBase64, numQuestions) {
   } catch (e) {
     qrData = { serial: codeOriginal.data };
   }
-  
+
   const serialNumber = qrData.serial || "UNKNOWN";
   const startIndex = qrData.startIndex || 0;
   const pageQuestionsCount = qrData.pageQuestions || numQuestions;
 
   // 3. Single Anchor Perspective Transform using QR Code corners
   const loc = codeOriginal.location;
-  
+
   const srcTri = cv.matFromArray(4, 1, cv.CV_32FC2, [
-    loc.topLeftCorner.x, loc.topLeftCorner.y,
-    loc.topRightCorner.x, loc.topRightCorner.y,
-    loc.bottomLeftCorner.x, loc.bottomLeftCorner.y,
-    loc.bottomRightCorner.x, loc.bottomRightCorner.y
+    loc.topLeftCorner.x,
+    loc.topLeftCorner.y,
+    loc.topRightCorner.x,
+    loc.topRightCorner.y,
+    loc.bottomLeftCorner.x,
+    loc.bottomLeftCorner.y,
+    loc.bottomRightCorner.x,
+    loc.bottomRightCorner.y,
   ]);
 
   const warpedWidth = 1240;
   const warpedHeight = 1754;
   const qrX = 100;
   const qrY = 150;
-  const qrSize = 250; 
-  
+  const qrSize = 250;
+
   const dstTri = cv.matFromArray(4, 1, cv.CV_32FC2, [
-    qrX, qrY,
-    qrX + qrSize, qrY,
-    qrX, qrY + qrSize,
-    qrX + qrSize, qrY + qrSize
+    qrX,
+    qrY,
+    qrX + qrSize,
+    qrY,
+    qrX,
+    qrY + qrSize,
+    qrX + qrSize,
+    qrY + qrSize,
   ]);
 
   const M = cv.getPerspectiveTransform(srcTri, dstTri);
   const warped = new cv.Mat();
   cv.warpPerspective(src, warped, M, new cv.Size(warpedWidth, warpedHeight));
 
-  srcTri.delete(); dstTri.delete(); M.delete();
+  srcTri.delete();
+  dstTri.delete();
+  M.delete();
 
   // 4. Extract Answers using Adaptive Threshold
   const warpedGray = new cv.Mat();
   cv.cvtColor(warped, warpedGray, cv.COLOR_RGBA2GRAY);
-  
+
   const warpedThresh = new cv.Mat();
-  cv.adaptiveThreshold(warpedGray, warpedThresh, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 25, 10);
+  cv.adaptiveThreshold(
+    warpedGray,
+    warpedThresh,
+    255,
+    cv.ADAPTIVE_THRESH_GAUSSIAN_C,
+    cv.THRESH_BINARY_INV,
+    25,
+    10,
+  );
 
   // Group contours to find question circles dynamically
   const warpedEdges = new cv.Mat();
   cv.Canny(warpedGray, warpedEdges, 50, 150);
   const warpedContours = new cv.MatVector();
   const warpedHierarchy = new cv.Mat();
-  cv.findContours(warpedEdges, warpedContours, warpedHierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+  cv.findContours(
+    warpedEdges,
+    warpedContours,
+    warpedHierarchy,
+    cv.RETR_EXTERNAL,
+    cv.CHAIN_APPROX_SIMPLE,
+  );
 
   const circles = [];
   for (let i = 0; i < warpedContours.size(); ++i) {
     const cnt = warpedContours.get(i);
     const rect = cv.boundingRect(cnt);
     // Dynamic circle size filtering based on QR size
-    if (rect.width >= 15 && rect.width <= 70 && rect.height >= 15 && rect.height <= 70) {
-       // Filter circles in the "Questions Area" (Below the QR code)
-       if (rect.y > qrY + qrSize + 20) {
-          circles.push(rect);
-       }
+    if (
+      rect.width >= 15 &&
+      rect.width <= 70 &&
+      rect.height >= 15 &&
+      rect.height <= 70
+    ) {
+      // Filter circles in the "Questions Area" (Below the QR code)
+      if (rect.y > qrY + qrSize + 20) {
+        circles.push(rect);
+      }
     }
   }
 
@@ -111,7 +146,8 @@ export async function gradeExamWithOMR(imageBase64, numQuestions) {
     if (currentRow.length === 0) {
       currentRow.push(c);
     } else {
-      const avgY = currentRow.reduce((s, box) => s + box.y, 0) / currentRow.length;
+      const avgY =
+        currentRow.reduce((s, box) => s + box.y, 0) / currentRow.length;
       if (Math.abs(c.y - avgY) < 18) {
         currentRow.push(c);
       } else {
@@ -126,12 +162,12 @@ export async function gradeExamWithOMR(imageBase64, numQuestions) {
   for (const row of rows) {
     row.sort((a, b) => a.x - b.x);
     let currentQ = [];
-    for (let i=0; i<row.length; i++) {
-       currentQ.push(row[i]);
-       if (i < row.length - 1 && (row[i+1].x - row[i].x > 70)) {
-           questions.push(currentQ);
-           currentQ = [];
-       }
+    for (let i = 0; i < row.length; i++) {
+      currentQ.push(row[i]);
+      if (i < row.length - 1 && row[i + 1].x - row[i].x > 70) {
+        questions.push(currentQ);
+        currentQ = [];
+      }
     }
     if (currentQ.length > 0) questions.push(currentQ);
   }
@@ -139,15 +175,16 @@ export async function gradeExamWithOMR(imageBase64, numQuestions) {
   // 6. Sort into RTL Columns
   const cols = [];
   for (const q of questions) {
-     let placed = false;
-     for (const col of cols) {
-        if (Math.abs(q[0].x - col[0][0].x) < 100) { // Using 100 to separate dense columns securely
-           col.push(q);
-           placed = true;
-           break;
-        }
-     }
-     if (!placed) cols.push([q]);
+    let placed = false;
+    for (const col of cols) {
+      if (Math.abs(q[0].x - col[0][0].x) < 100) {
+        // Using 100 to separate dense columns securely
+        col.push(q);
+        placed = true;
+        break;
+      }
+    }
+    if (!placed) cols.push([q]);
   }
 
   // Sort columns Right-to-Left
@@ -155,20 +192,26 @@ export async function gradeExamWithOMR(imageBase64, numQuestions) {
 
   const orderedQuestions = [];
   for (const col of cols) {
-     // Sort questions within column Top-to-Bottom
-     col.sort((a, b) => a[0].y - b[0].y);
-     for (const q of col) {
-        orderedQuestions.push(q);
-     }
+    // Sort questions within column Top-to-Bottom
+    col.sort((a, b) => a[0].y - b[0].y);
+    for (const q of col) {
+      orderedQuestions.push(q);
+    }
   }
 
   const finalQuestions = orderedQuestions.slice(0, pageQuestionsCount);
 
   if (finalQuestions.length === 0) {
-    warped.delete(); warpedGray.delete(); warpedThresh.delete();
-    warpedEdges.delete(); warpedContours.delete(); warpedHierarchy.delete();
+    warped.delete();
+    warpedGray.delete();
+    warpedThresh.delete();
+    warpedEdges.delete();
+    warpedContours.delete();
+    warpedHierarchy.delete();
     src.delete();
-    throw new Error("لم يتم العثور على خيارات الإجابة (الدوائر). تأكد من إضاءة الغرفة ووضوح الدوائر.");
+    throw new Error(
+      "لم يتم العثور على خيارات الإجابة (الدوائر). تأكد من إضاءة الغرفة ووضوح الدوائر.",
+    );
   }
 
   const optionsLetters = ["A", "B", "C", "D"];
@@ -177,31 +220,31 @@ export async function gradeExamWithOMR(imageBase64, numQuestions) {
   for (let i = 0; i < pageQuestionsCount; i++) {
     const qCircles = finalQuestions[i];
     const questionKey = (startIndex + i + 1).toString();
-    
+
     if (!qCircles || qCircles.length === 0) {
-       answers[questionKey] = "EMPTY";
-       continue;
+      answers[questionKey] = "EMPTY";
+      continue;
     }
-    
+
     qCircles.sort((a, b) => a.x - b.x);
 
     let bestOption = null;
     let maxDarkness = 0;
     let densities = [];
-    
+
     for (let j = 0; j < Math.min(qCircles.length, 4); j++) {
       const rect = qCircles[j];
-      const borderOffset = Math.round(rect.width * 0.15); 
+      const borderOffset = Math.round(rect.width * 0.15);
       const innerRect = new cv.Rect(
-         rect.x + borderOffset, 
-         rect.y + borderOffset, 
-         rect.width - 2 * borderOffset, 
-         rect.height - 2 * borderOffset
+        rect.x + borderOffset,
+        rect.y + borderOffset,
+        rect.width - 2 * borderOffset,
+        rect.height - 2 * borderOffset,
       );
 
       const roi = warpedThresh.roi(innerRect);
       const totalPixels = innerRect.width * innerRect.height;
-      const whitePixels = cv.countNonZero(roi); 
+      const whitePixels = cv.countNonZero(roi);
       const darkness = whitePixels / totalPixels;
       densities.push(darkness);
       roi.delete();
@@ -211,11 +254,11 @@ export async function gradeExamWithOMR(imageBase64, numQuestions) {
         bestOption = optionsLetters[j];
       }
     }
-    
-    let sorted = [...densities].sort((a,b) => b - a);
+
+    let sorted = [...densities].sort((a, b) => b - a);
     const secondMax = sorted.length > 1 ? sorted[1] : 0;
 
-    if (maxDarkness < 0.25) { 
+    if (maxDarkness < 0.25) {
       answers[questionKey] = "EMPTY";
     } else if (secondMax > maxDarkness * 0.7 && secondMax > 0.25) {
       answers[questionKey] = "INVALID";
@@ -225,8 +268,17 @@ export async function gradeExamWithOMR(imageBase64, numQuestions) {
   }
 
   src.delete();
-  warped.delete(); warpedGray.delete(); warpedThresh.delete();
-  warpedEdges.delete(); warpedContours.delete(); warpedHierarchy.delete();
+  warped.delete();
+  warpedGray.delete();
+  warpedThresh.delete();
+  warpedEdges.delete();
+  warpedContours.delete();
+  warpedHierarchy.delete();
 
-  return { serialNumber, answers, page: qrData.page || 0, isPartial: pageQuestionsCount < numQuestions };
+  return {
+    serialNumber,
+    answers,
+    page: qrData.page || 0,
+    isPartial: pageQuestionsCount < numQuestions,
+  };
 }
