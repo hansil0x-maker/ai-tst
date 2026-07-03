@@ -93,7 +93,7 @@ export async function gradeExamWithOMR(imageBase64, numQuestions) {
     const cnt = warpedContours.get(i);
     const rect = cv.boundingRect(cnt);
     // Dynamic circle size filtering based on QR size
-    if (rect.width >= 25 && rect.width <= 70 && rect.height >= 25 && rect.height <= 70) {
+    if (rect.width >= 15 && rect.width <= 70 && rect.height >= 15 && rect.height <= 70) {
        // Filter circles in the "Questions Area" (Below the QR code)
        if (rect.y > qrY + qrSize + 20) {
           circles.push(rect);
@@ -110,7 +110,7 @@ export async function gradeExamWithOMR(imageBase64, numQuestions) {
       currentRow.push(c);
     } else {
       const avgY = currentRow.reduce((s, box) => s + box.y, 0) / currentRow.length;
-      if (Math.abs(c.y - avgY) < 30) {
+      if (Math.abs(c.y - avgY) < 18) {
         currentRow.push(c);
       } else {
         rows.push(currentRow);
@@ -126,7 +126,7 @@ export async function gradeExamWithOMR(imageBase64, numQuestions) {
     let currentQ = [];
     for (let i=0; i<row.length; i++) {
        currentQ.push(row[i]);
-       if (i < row.length - 1 && (row[i+1].x - row[i].x > 100)) {
+       if (i < row.length - 1 && (row[i+1].x - row[i].x > 70)) {
            questions.push(currentQ);
            currentQ = [];
        }
@@ -139,7 +139,7 @@ export async function gradeExamWithOMR(imageBase64, numQuestions) {
   for (const q of questions) {
      let placed = false;
      for (const col of cols) {
-        if (Math.abs(q[0].x - col[0][0].x) < 200) { // Using 200 to accommodate wide question columns
+        if (Math.abs(q[0].x - col[0][0].x) < 100) { // Using 100 to separate dense columns securely
            col.push(q);
            placed = true;
            break;
