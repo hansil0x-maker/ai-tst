@@ -16,7 +16,7 @@ import { syncManager } from "../sync";
 import toast from "react-hot-toast";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
-import QRCode from "qrcode";
+import JsBarcode from "jsbarcode";
 
 export default function Exams() {
   const [isCreating, setIsCreating] = useState(false);
@@ -209,7 +209,7 @@ export default function Exams() {
 
       // 1. Generate Answer Sheet HTML for a student
       const generateAnswerSheet = async (student: any) => {
-        const MAX_ANSWERS_PER_PAGE = 100;
+        const MAX_ANSWERS_PER_PAGE = 60;
         const answerPagesCount =
           Math.ceil(exam.questions.length / MAX_ANSWERS_PER_PAGE) || 1;
         let htmlPages = [];
@@ -221,19 +221,19 @@ export default function Exams() {
             startIndex + MAX_ANSWERS_PER_PAGE,
           );
 
-          const qrData = JSON.stringify({
-            examId: exam.id,
-            studentId: student.id,
-            serial: student.serialNumber,
-            page: p,
-            startIndex: startIndex,
-            pageQuestions: pageQuestions.length,
+          // Barcode: ExamId(first 8 chars) - studentSerial - page - startIndex - pageQuestionsCount
+          const shortExamId = exam.id.split("-")[0];
+          const barcodeData = `${shortExamId}-${student.serialNumber}-${p}-${startIndex}-${pageQuestions.length}`;
+          
+          const canvas = document.createElement("canvas");
+          JsBarcode(canvas, barcodeData, {
+            format: "CODE128",
+            displayValue: false,
+            height: 35,
+            width: 2,
+            margin: 0,
           });
-          const qrDataUrl = await QRCode.toDataURL(qrData, {
-            margin: 1,
-            width: 200,
-            errorCorrectionLevel: "H",
-          });
+          const barcodeDataUrl = canvas.toDataURL("image/png");
 
           let cols = 4;
           let gap = "10px";
@@ -242,33 +242,32 @@ export default function Exams() {
 
           htmlPages.push(`
             <div class="page" style="width: 210mm; min-height: 297mm; padding: 15mm; box-sizing: border-box; background: white; display: flex; flex-direction: column; position: relative; page-break-after: always; break-after: page; page-break-inside: avoid; break-inside: avoid;">
-              <div style="text-align: center; border-bottom: 2px solid #000; padding-bottom: 5px; margin-bottom: 10px;">
+              <div style="text-align: center; padding-bottom: 5px; margin-bottom: 5px;">
                 <div style="font-size: 20px; font-weight: bold;">${settings.schoolName || "اسم المدرسة"}</div>
                 <div style="font-size: 14px; color: #555;">العام الدراسي: ${settings.academicYear || ""}</div>
                 <div style="font-size: 18px; font-weight: bold; margin-top: 5px;">ورقة إجابة - ${exam.title} ${answerPagesCount > 1 ? `(صفحة ${p + 1})` : ""}</div>
               </div>
               
+              <div style="text-align: center; margin-bottom: 15px;">
+                 <img src="${barcodeDataUrl}" style="width: 100%; height: 35px; display: block;" alt="Barcode" />
+              </div>
+
               <div style="display: flex; justify-content: space-between; margin-bottom: 15px; align-items: flex-start; gap: 10px;">
-                <div style="flex: 1; font-size: 14px; line-height: 1.6;">
+                <div style="flex: 1; font-size: 14px; line-height: 1.6; text-align: right;">
                   <div><strong>اسم الطالب:</strong> ${student.name}</div>
                   <div><strong>الصف:</strong> ${examClass.name}</div>
                   <div><strong>المادة:</strong> ${exam.subject}</div>
                   <div><strong>رقم الجلوس:</strong> ${student.serialNumber}</div>
                 </div>
-                <div style="flex: 2; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 8px; font-size: 8pt; line-height: 1.4;">
+                <div style="flex: 1; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 8px; font-size: 8pt; line-height: 1.4;">
                   <div style="font-weight: bold; margin-bottom: 4px;">📌 تعليمات:</div>
                   <ol style="margin: 0; padding-right: 20px;">
                     <li>استخدم قلمًا أسود/أزرق داكن لتظليل الدائرة بالكامل (●).</li>
                     <li>لا تستخدم علامة (✔) أو (✖) أو تظلل أكثر من دائرة.</li>
-                    <li>يُمنع الكتابة في منطقة رمز الـ QR أو مربعات الإجابة.</li>
+                    <li>يُمنع الكتابة فوق الرمز الشريطي أو مربعات الإجابة.</li>
                   </ol>
                 </div>
-                <div style="width: 120px; height: 120px; padding: 2px; flex-shrink: 0; align-self: flex-start; margin-top: -20px;">
-                  <img src="${qrDataUrl}" width="100%" height="100%" style="display: block;" />
-                </div>
               </div>
-              
-              <hr style="border: 0; border-bottom: 2px solid #000; margin-bottom: 15px;" />
               
               <div style="flex-grow: 1; display: grid; grid-template-columns: repeat(${cols}, 1fr); gap: ${gap}; align-content: start;">
                 ${pageQuestions
