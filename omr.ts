@@ -44,6 +44,8 @@ export async function gradeExamWithOMR(imageBase64, numQuestions) {
   }
   
   const serialNumber = qrData.serial || "UNKNOWN";
+  const startIndex = qrData.startIndex || 0;
+  const pageQuestionsCount = qrData.pageQuestions || numQuestions;
 
   // 3. Single Anchor Perspective Transform using QR Code corners
   const loc = codeOriginal.location;
@@ -160,7 +162,7 @@ export async function gradeExamWithOMR(imageBase64, numQuestions) {
      }
   }
 
-  const finalQuestions = orderedQuestions.slice(0, numQuestions);
+  const finalQuestions = orderedQuestions.slice(0, pageQuestionsCount);
 
   if (finalQuestions.length === 0) {
     warped.delete(); warpedGray.delete(); warpedThresh.delete();
@@ -172,10 +174,12 @@ export async function gradeExamWithOMR(imageBase64, numQuestions) {
   const optionsLetters = ["A", "B", "C", "D"];
   let answers = {};
 
-  for (let i = 0; i < numQuestions; i++) {
+  for (let i = 0; i < pageQuestionsCount; i++) {
     const qCircles = finalQuestions[i];
+    const questionKey = (startIndex + i + 1).toString();
+    
     if (!qCircles || qCircles.length === 0) {
-       answers[(i+1).toString()] = "EMPTY";
+       answers[questionKey] = "EMPTY";
        continue;
     }
     
@@ -212,11 +216,11 @@ export async function gradeExamWithOMR(imageBase64, numQuestions) {
     const secondMax = sorted.length > 1 ? sorted[1] : 0;
 
     if (maxDarkness < 0.25) { 
-      answers[(i+1).toString()] = "EMPTY";
+      answers[questionKey] = "EMPTY";
     } else if (secondMax > maxDarkness * 0.7 && secondMax > 0.25) {
-      answers[(i+1).toString()] = "INVALID";
+      answers[questionKey] = "INVALID";
     } else {
-      answers[(i+1).toString()] = bestOption;
+      answers[questionKey] = bestOption;
     }
   }
 
@@ -224,5 +228,5 @@ export async function gradeExamWithOMR(imageBase64, numQuestions) {
   warped.delete(); warpedGray.delete(); warpedThresh.delete();
   warpedEdges.delete(); warpedContours.delete(); warpedHierarchy.delete();
 
-  return { serialNumber, answers };
+  return { serialNumber, answers, page: qrData.page || 0, isPartial: pageQuestionsCount < numQuestions };
 }

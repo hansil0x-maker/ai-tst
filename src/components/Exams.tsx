@@ -134,68 +134,81 @@ export default function Exams() {
 
       // 1. Generate Answer Sheet HTML for a student
       const generateAnswerSheet = async (student: any) => {
-        const qrData = JSON.stringify({ examId: exam.id, studentId: student.id, serial: student.serialNumber });
-        const qrDataUrl = await QRCode.toDataURL(qrData, { margin: 1, width: 200, errorCorrectionLevel: 'H' });
-        
-        const qCount = exam.questions.length;
-        let cols = 2;
-        let gap = "40px";
-        let bubbleSize = "28px";
-        let padding = "8px 0";
-        if (qCount > 40) { cols = 3; gap = "20px"; bubbleSize = "24px"; padding = "6px 0"; }
-        if (qCount > 60) { cols = 4; gap = "15px"; bubbleSize = "20px"; padding = "4px 0"; }
-        if (qCount > 80) { cols = 5; gap = "10px"; bubbleSize = "18px"; padding = "2px 0"; }
+        const MAX_ANSWERS_PER_PAGE = 50;
+        const answerPagesCount = Math.ceil(exam.questions.length / MAX_ANSWERS_PER_PAGE) || 1;
+        let htmlPages = [];
 
-        return `
-          <div class="page" style="width: 210mm; height: 296mm; padding: 15mm; box-sizing: border-box; background: white; display: flex; flex-direction: column; position: relative; page-break-after: always; break-after: page;">
-            <div style="text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px;">
-              <div style="font-size: 24px; font-weight: bold;">${settings.schoolName || 'اسم المدرسة'}</div>
-              <div style="font-size: 14px; color: #555;">العام الدراسي: ${settings.academicYear || ''}</div>
-              <div style="font-size: 18px; font-weight: bold; margin-top: 5px;">ورقة إجابة - ${exam.title}</div>
-            </div>
-            
-            <div style="display: flex; justify-content: space-between; margin-bottom: 20px; align-items: flex-start; gap: 20px;">
-              <div style="flex: 1; font-size: 15px; line-height: 1.8;">
-                <div><strong>اسم الطالب:</strong> ${student.name}</div>
-                <div><strong>الصف:</strong> ${examClass.name}</div>
-                <div><strong>المادة:</strong> ${exam.subject}</div>
-                <div><strong>رقم الجلوس:</strong> ${student.serialNumber}</div>
+        for (let p = 0; p < answerPagesCount; p++) {
+          const startIndex = p * MAX_ANSWERS_PER_PAGE;
+          const pageQuestions = exam.questions.slice(startIndex, startIndex + MAX_ANSWERS_PER_PAGE);
+          
+          const qrData = JSON.stringify({ 
+            examId: exam.id, 
+            studentId: student.id, 
+            serial: student.serialNumber,
+            page: p,
+            startIndex: startIndex,
+            pageQuestions: pageQuestions.length
+          });
+          const qrDataUrl = await QRCode.toDataURL(qrData, { margin: 1, width: 200, errorCorrectionLevel: 'H' });
+          
+          let cols = 2;
+          let gap = "40px";
+          let bubbleSize = "28px";
+          let padding = "8px 0";
+
+          htmlPages.push(`
+            <div class="page" style="width: 210mm; height: 297mm; padding: 15mm; box-sizing: border-box; background: white; display: flex; flex-direction: column; position: relative; page-break-after: always; break-after: page;">
+              <div style="text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px;">
+                <div style="font-size: 24px; font-weight: bold;">${settings.schoolName || 'اسم المدرسة'}</div>
+                <div style="font-size: 14px; color: #555;">العام الدراسي: ${settings.academicYear || ''}</div>
+                <div style="font-size: 18px; font-weight: bold; margin-top: 5px;">ورقة إجابة - ${exam.title} ${answerPagesCount > 1 ? `(صفحة ${p + 1})` : ''}</div>
               </div>
-              <div style="flex: 2; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 10px; font-size: 9pt; line-height: 1.5;">
-                <div style="font-weight: bold; margin-bottom: 4px;">📌 تعليمات هامة للإجابة:</div>
-                <ol style="margin: 0; padding-right: 20px;">
-                  <li>استخدم قلمًا جافًا أسود أو أزرق داكن لتظليل الإجابات، وتجنب الأقلام الباهتة.</li>
-                  <li>قم بتظليل الدائرة بالكامل بشكل مصمت (●)، ولا تضع مجرد علامة (✔) أو (✖).</li>
-                  <li>يحظر تظليل أكثر من دائرة لنفس السؤال.</li>
-                  <li>يُمنع منعاً باتاً الطي أو الكتابة في منطقة رمز الـ QR أو مربعات الإجابة.</li>
-                </ol>
-              </div>
-              <div style="width: 140px; height: 140px; padding: 4px; flex-shrink: 0;">
-                <img src="${qrDataUrl}" width="100%" height="100%" style="display: block;" />
-              </div>
-            </div>
-            
-            <hr style="border: 0; border-bottom: 2px solid #000; margin-bottom: 20px;" />
-            
-            <div style="flex-grow: 1; display: grid; grid-template-columns: repeat(${cols}, 1fr); gap: ${gap}; align-content: start;">
-              ${exam.questions.map((qInfo: any) => `
-                <div style="display: flex; align-items: center; justify-content: space-between; padding: ${padding}; border-bottom: 1px dashed #ccc;">
-                  <div style="font-weight: bold; font-size: 16px; width: 30px;">${qInfo.id}.</div>
-                  <div style="display: flex; gap: 10px; direction: ltr;">
-                    <div style="width: ${bubbleSize}; height: ${bubbleSize}; border: 2px solid #000; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold;">A</div>
-                    <div style="width: ${bubbleSize}; height: ${bubbleSize}; border: 2px solid #000; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold;">B</div>
-                    <div style="width: ${bubbleSize}; height: ${bubbleSize}; border: 2px solid #000; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold;">C</div>
-                    <div style="width: ${bubbleSize}; height: ${bubbleSize}; border: 2px solid #000; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold;">D</div>
-                  </div>
+              
+              <div style="display: flex; justify-content: space-between; margin-bottom: 20px; align-items: flex-start; gap: 20px;">
+                <div style="flex: 1; font-size: 15px; line-height: 1.8;">
+                  <div><strong>اسم الطالب:</strong> ${student.name}</div>
+                  <div><strong>الصف:</strong> ${examClass.name}</div>
+                  <div><strong>المادة:</strong> ${exam.subject}</div>
+                  <div><strong>رقم الجلوس:</strong> ${student.serialNumber}</div>
                 </div>
-              `).join('')}
+                <div style="flex: 2; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 10px; font-size: 9pt; line-height: 1.5;">
+                  <div style="font-weight: bold; margin-bottom: 4px;">📌 تعليمات هامة للإجابة:</div>
+                  <ol style="margin: 0; padding-right: 20px;">
+                    <li>استخدم قلمًا جافًا أسود أو أزرق داكن لتظليل الإجابات، وتجنب الأقلام الباهتة.</li>
+                    <li>قم بتظليل الدائرة بالكامل بشكل مصمت (●)، ولا تضع مجرد علامة (✔) أو (✖).</li>
+                    <li>يحظر تظليل أكثر من دائرة لنفس السؤال.</li>
+                    <li>يُمنع منعاً باتاً الطي أو الكتابة في منطقة رمز الـ QR أو مربعات الإجابة.</li>
+                  </ol>
+                </div>
+                <div style="width: 140px; height: 140px; padding: 4px; flex-shrink: 0;">
+                  <img src="${qrDataUrl}" width="100%" height="100%" style="display: block;" />
+                </div>
+              </div>
+              
+              <hr style="border: 0; border-bottom: 2px solid #000; margin-bottom: 20px;" />
+              
+              <div style="flex-grow: 1; display: grid; grid-template-columns: repeat(${cols}, 1fr); gap: ${gap}; align-content: start;">
+                ${pageQuestions.map((qInfo: any, index: number) => `
+                  <div style="display: flex; align-items: center; justify-content: space-between; padding: ${padding}; border-bottom: 1px dashed #ccc;">
+                    <div style="font-weight: bold; font-size: 16px; width: 30px;">${startIndex + index + 1}.</div>
+                    <div style="display: flex; gap: 10px; direction: ltr;">
+                      <div style="width: ${bubbleSize}; height: ${bubbleSize}; border: 2px solid #000; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold;">A</div>
+                      <div style="width: ${bubbleSize}; height: ${bubbleSize}; border: 2px solid #000; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold;">B</div>
+                      <div style="width: ${bubbleSize}; height: ${bubbleSize}; border: 2px solid #000; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold;">C</div>
+                      <div style="width: ${bubbleSize}; height: ${bubbleSize}; border: 2px solid #000; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold;">D</div>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+              
+              <div style="position: absolute; bottom: 10mm; width: calc(100% - 30mm); text-align: center; font-size: 11px; color: #666;">
+                الرجاء تظليل الدائرة بالكامل باستخدام قلم حبر أو رصاص غامق. لا تستخدم علامة (✓) أو (✗).
+              </div>
             </div>
-            
-            <div style="position: absolute; bottom: 10mm; width: calc(100% - 30mm); text-align: center; font-size: 11px; color: #666;">
-              الرجاء تظليل الدائرة بالكامل باستخدام قلم حبر أو رصاص غامق. لا تستخدم علامة (✓) أو (✗).
-            </div>
-          </div>
-        `;
+          `);
+        }
+        return htmlPages.join('');
       };
 
       // 2. Generate Question Pages HTML
@@ -315,13 +328,13 @@ export default function Exams() {
           <meta charset="utf-8">
           <title>${exam.subject} - ${examClass?.name || ''}</title>
           <style>
-            @page { size: 210mm 297mm; margin: 0; }
+            @page { size: A4 portrait; margin: 0; }
             body { margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; background: #eee; }
             * { box-sizing: border-box; }
-            .page { background: white; margin: 0 auto; overflow: hidden; box-shadow: 0 0 5px rgba(0,0,0,0.1); width: 210mm; height: 297mm; position: relative; }
+            .page { background: white; margin: 0 auto; overflow: hidden; box-shadow: 0 0 5px rgba(0,0,0,0.1); width: 210mm; min-height: 297mm; position: relative; }
             @media print {
-              body { background: white; }
-              .page { margin: 0; box-shadow: none; width: 210mm; height: 297mm; page-break-after: always; break-after: page; }
+               body { background: white; }
+              .page { margin: 0; box-shadow: none; width: 100%; min-height: 100%; page-break-after: always; break-after: page; }
             }
           </style>
         </head>

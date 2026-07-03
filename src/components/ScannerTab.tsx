@@ -97,12 +97,14 @@ export default function ScannerTab() {
         if (student) {
           // Check for duplicate
           const existing = await db.results.where({ examId: exam.id, studentId: student.id }).first();
-          if (existing) {
-            const confirmed = window.confirm(`لقد تم تصحيح هذا الامتحان للطالب ${student.name} مسبقاً (الدرجة السابقة: ${existing.percentage}%). هل تريد إعادة التصحيح واستبدال النتيجة؟`);
+          if (existing && data.page === 0) {
+            const confirmed = window.confirm(`لقد تم تصحيح الصفحة الأولى لهذا الامتحان للطالب ${student.name} مسبقاً (الدرجة: ${existing.percentage}%). هل تريد إعادة التصحيح واستبدال النتيجة؟`);
             if (!confirmed) {
               toast('تم تخطي الورقة.');
               return false; // Skip
             }
+          } else if (existing && data.page > 0) {
+            toast.success(`تم قراءة الصفحة ${data.page + 1} للطالب ${student.name}`);
           }
 
           toast.success(`تم التصحيح لـ: ${student.name}`);
@@ -260,12 +262,45 @@ export default function ScannerTab() {
     // Save or update Result
     const existing = await db.results.where({ examId: exam.id, studentId: student.id }).first();
     if (existing && existing.id) {
-       await db.results.update(existing.id, newResult);
+       // Merge answers if this is a new page scan
+       const mergedAnswers = { ...existing.scannedAnswers, ...answers };
+       
+       let newScore = 0;
+       const newErrors: any[] = [];
+       exam.questions.forEach((q: any, index: number) => {
+         const studentAns = mergedAnswers[(index + 1).toString()];
+         if (studentAns === q.correctAnswer) {
+           newScore++;
+         } else {
+           newErrors.push({
+             number: index + 1,
+             selected: studentAns || 'لم يجب',
+             correct: q.correctAnswer
+           });
+         }
+       });
+
+       const newPercentage = Math.round((newScore / total) * 100);
+       let newCategory = 'Fail';
+       if (newPercentage === 100) newCategory = 'Perfect'; 
+       else if (newScore >= exam.passMark) newCategory = 'Pass';
+
+       const updatedResult = {
+          ...newResult,
+          scannedAnswers: mergedAnswers,
+          score: newScore,
+          percentage: newPercentage,
+          category: newCategory as any,
+          errors: newErrors
+       };
+
+       await db.results.update(existing.id, updatedResult);
+       setFinalScore({ ...updatedResult, correctCount: newScore, wrongCount: total - newScore });
+       syncManager.sendResults([updatedResult]);
     } else {
        await db.results.add(newResult);
+       syncManager.sendResults([newResult]);
     }
-    
-    syncManager.sendResults([newResult]);
   };
 
   const resetScanner = () => {
