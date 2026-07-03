@@ -209,7 +209,7 @@ export default function Exams() {
 
       // 1. Generate Answer Sheet HTML for a student
       const generateAnswerSheet = async (student: any) => {
-        const MAX_ANSWERS_PER_PAGE = 120;
+        const MAX_ANSWERS_PER_PAGE = 100;
         const answerPagesCount =
           Math.ceil(exam.questions.length / MAX_ANSWERS_PER_PAGE) || 1;
         let htmlPages = [];
@@ -235,13 +235,13 @@ export default function Exams() {
             errorCorrectionLevel: "H",
           });
 
-          let cols = Math.min(4, Math.ceil(pageQuestions.length / 30)) || 1;
-          let gap = cols >= 4 ? "10px" : cols === 3 ? "15px" : "30px";
-          let bubbleSize = cols >= 4 ? "16px" : cols === 3 ? "18px" : "22px";
-          let padding = cols >= 4 ? "3px 0" : "5px 0";
+          let cols = 4;
+          let gap = "10px";
+          let bubbleSize = "15px";
+          let padding = "3px 0";
 
           htmlPages.push(`
-            <div class="page" style="width: 210mm; min-height: 297mm; padding: 15mm; box-sizing: border-box; background: white; display: flex; flex-direction: column; position: relative; page-break-after: always; break-after: page;">
+            <div class="page" style="width: 210mm; min-height: 297mm; padding: 15mm; box-sizing: border-box; background: white; display: flex; flex-direction: column; position: relative; page-break-after: always; break-after: page; page-break-inside: avoid; break-inside: avoid;">
               <div style="text-align: center; border-bottom: 2px solid #000; padding-bottom: 5px; margin-bottom: 10px;">
                 <div style="font-size: 20px; font-weight: bold;">${settings.schoolName || "اسم المدرسة"}</div>
                 <div style="font-size: 14px; color: #555;">العام الدراسي: ${settings.academicYear || ""}</div>
@@ -298,24 +298,19 @@ export default function Exams() {
       };
 
       // 2. Generate Question Pages HTML
-      const generateQuestionPages = () => {
+      const generateQuestionPages = (studentName?: string) => {
         let pagesHtml = "";
-        for (let pIdx = 0; pIdx < questionPagesCount; pIdx++) {
-          const pageQuestions = exam.questions.slice(
-            pIdx * MAX_Q,
-            (pIdx + 1) * MAX_Q,
-          );
-          pagesHtml += `
-            <div class="page" style="width: 210mm; height: 296mm; padding: 15mm; box-sizing: border-box; background: white; position: relative; page-break-after: always; break-after: page;">
+        pagesHtml += `
+            <div class="page" style="width: 210mm; height: auto; min-height: 297mm; padding: 15mm; box-sizing: border-box; background: white; position: relative; page-break-after: always; break-after: page; page-break-inside: avoid; break-inside: avoid;">
               <div style="text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px;">
                 <div style="font-size: 20px; font-weight: bold;">ورقة الأسئلة - ${exam.title}</div>
-                <div style="font-size: 14px;">الصفحة ${pIdx + 1} من ${questionPagesCount}</div>
+                ${studentName ? `<div style="font-size: 14px;">الطالب: ${studentName}</div>` : ""}
               </div>
               <div>
-                ${pageQuestions
+                ${exam.questions
                   .map(
                     (qInfo: any) => `
-                  <div style="margin-bottom: 25px;">
+                  <div style="margin-bottom: 25px; page-break-inside: avoid; break-inside: avoid;">
                     <div style="font-weight: bold; margin-bottom: 10px; font-size: 16px;">${qInfo.id}. ${qInfo.text}</div>
                     <div style="font-size: 15px; line-height: 1.8; display: flex; gap: 20px; flex-wrap: wrap;">
                       <div style="flex: 1; min-width: 150px;">أ) ${qInfo.options.A || ""}</div>
@@ -330,7 +325,6 @@ export default function Exams() {
               </div>
             </div>
           `;
-        }
         return pagesHtml;
       };
 
@@ -348,54 +342,15 @@ export default function Exams() {
           finalHtml += generateQuestionPages();
         }
       } else if (printMode === "duplex") {
-        const MAX_ANSWERS_PER_PAGE = 120;
-        const answerPagesCount =
-          Math.ceil(exam.questions.length / MAX_ANSWERS_PER_PAGE) || 1;
-
         for (let i = 0; i < classStudents.length; i++) {
-          finalHtml += await generateAnswerSheet(classStudents[i]);
-
-          let qHtml = "";
-          for (let pIdx = 0; pIdx < questionPagesCount; pIdx++) {
-            const pageQuestions = exam.questions.slice(
-              pIdx * MAX_Q,
-              (pIdx + 1) * MAX_Q,
-            );
-            if (pageQuestions.length > 0) {
-              qHtml += `
-                  <div class="page" style="width: 210mm; min-height: 297mm; padding: 15mm; box-sizing: border-box; background: white; position: relative; page-break-after: always; break-after: page;">
-                    <div style="text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px;">
-                      <div style="font-size: 20px; font-weight: bold;">ورقة الأسئلة - ${exam.title}</div>
-                      <div style="font-size: 14px;">الطالب: ${classStudents[i].name} - الصفحة ${pIdx + 1}</div>
-                    </div>
-                    <div>
-                      ${pageQuestions
-                        .map(
-                          (qInfo: any) => `
-                        <div style="margin-bottom: 25px;">
-                          <div style="font-weight: bold; margin-bottom: 10px; font-size: 16px;">${qInfo.id}. ${qInfo.text}</div>
-                          <div style="font-size: 15px; line-height: 1.8; display: flex; gap: 20px; flex-wrap: wrap;">
-                            <div style="flex: 1; min-width: 150px;">أ) ${qInfo.options.A || ""}</div>
-                            <div style="flex: 1; min-width: 150px;">ب) ${qInfo.options.B || ""}</div>
-                            <div style="flex: 1; min-width: 150px;">ج) ${qInfo.options.C || ""}</div>
-                            <div style="flex: 1; min-width: 150px;">د) ${qInfo.options.D || ""}</div>
-                          </div>
-                        </div>
-                      `,
-                        )
-                        .join("")}
-                    </div>
-                  </div>
-                `;
-            }
-          }
-          finalHtml += qHtml;
-
-          // Ensure student document total pages is even for duplex!
-          const totalStudentPages = answerPagesCount + questionPagesCount;
-          if (totalStudentPages % 2 !== 0) {
-            finalHtml += `<div class="page" style="width: 210mm; min-height: 297mm; page-break-after: always; break-after: page;"></div>`;
-          }
+          // break-before: right forces the container to start on a new physical piece of paper
+          // This avoids the need to manually inject blank pages and prevents truncation issues!
+          finalHtml += `
+            <div style="page-break-before: ${i === 0 ? 'auto' : 'right'}; break-before: ${i === 0 ? 'auto' : 'right'};">
+              ${await generateAnswerSheet(classStudents[i])}
+              ${generateQuestionPages(classStudents[i].name)}
+            </div>
+          `;
         }
       } else if (printMode === "booklet") {
         // Simple sequential for now, the printer driver usually handles actual imposition
@@ -432,7 +387,7 @@ export default function Exams() {
             @page { size: A4 portrait; margin: 0; }
             body { margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; background: #eee; }
             * { box-sizing: border-box; }
-            .page { background: white; margin: 0 auto; overflow: hidden; box-shadow: 0 0 5px rgba(0,0,0,0.1); width: 210mm; min-height: 297mm; position: relative; }
+            .page { background: white; margin: 0 auto; box-shadow: 0 0 5px rgba(0,0,0,0.1); width: 210mm; min-height: 297mm; position: relative; }
             @media print {
                body { background: white; }
               .page { margin: 0; box-shadow: none; width: 100%; min-height: 100%; page-break-after: always; break-after: page; }
