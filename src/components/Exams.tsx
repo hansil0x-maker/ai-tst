@@ -222,8 +222,8 @@ export default function Exams() {
           );
 
           // Barcode: ExamId(first 8 chars) - studentSerial - page - startIndex - pageQuestionsCount
-          const shortExamId = exam.id.split("-")[0];
-          const barcodeData = `${shortExamId}-${student.serialNumber}-${p}-${startIndex}-${pageQuestions.length}`;
+          const shortExamId = exam.id;
+          const barcodeData = `${shortExamId}_${student.serialNumber}_${p}_${startIndex}_${pageQuestions.length}`;
           
           const canvas = document.createElement("canvas");
           JsBarcode(canvas, barcodeData, {
@@ -407,7 +407,7 @@ export default function Exams() {
       }, 500);
     } catch (error) {
       console.error(error);
-      toast.error("حدث خطأ أثناء تجهيز ملف الطباعة", { id: t });
+      toast.error("Error: " + (error as Error).message, { id: t });
     }
   };
 

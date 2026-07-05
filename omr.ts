@@ -45,7 +45,7 @@ export async function gradeExamWithOMR(imageBase64, numQuestions) {
   }
 
   const barcodeText = result.getText();
-  const parts = barcodeText.split('-');
+  const parts = barcodeText.split('_');
   
   // Format: shortExamId - serialNumber - page - startIndex - pageQuestionsCount
   const serialNumber = parts[1] || "UNKNOWN";
