@@ -343,6 +343,10 @@ export default function CreateExamFlow({ onCancel, onComplete }: { onCancel: () 
 
           {errorMsg && <div className="p-4 bg-red-900/30 border border-red-800 text-red-200 rounded-xl text-sm">{errorMsg}</div>}
 
+          <div className="p-4 bg-yellow-900/20 border border-yellow-800/50 text-yellow-200/80 rounded-xl text-sm mb-4">
+            💡 ملاحظة: الحد الأقصى لعدد الأسئلة في كل ورقة إجابة (وجه واحد) هو 60 سؤالاً. سيتم توزيع الأسئلة الإضافية على صفحات إجابة جديدة تلقائياً.
+          </div>
+
           <button onClick={handleGenerate} disabled={isGenerating} className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium py-4 rounded-xl transition-colors flex items-center justify-center space-x-2 space-x-reverse">
             {isGenerating ? <Loader2 className="animate-spin" /> : <Sparkles />}
             <span>{isGenerating ? 'جاري التوليد...' : 'توليد بالذكاء الاصطناعي'}</span>

@@ -123,64 +123,55 @@ export async function gradeExamWithOMR(imageBase64, numQuestions) {
     }
   }
 
-  // 5. Group circles into Rows (Questions)
-  circles.sort((a, b) => a.y - b.y);
-  let rows = [];
-  let currentRow = [];
+  // 5. Group into Major Columns (by X)
+  circles.sort((a, b) => a.x - b.x);
+  let majorCols = [];
+  let currentCol = [];
   for (const c of circles) {
-    if (currentRow.length === 0) {
-      currentRow.push(c);
+    if (currentCol.length === 0) {
+      currentCol.push(c);
     } else {
-      const avgY =
-        currentRow.reduce((s, box) => s + box.y, 0) / currentRow.length;
-      if (Math.abs(c.y - avgY) < 18) {
+      if (c.x - currentCol[currentCol.length - 1].x < 50) {
+        currentCol.push(c);
+      } else {
+        majorCols.push(currentCol);
+        currentCol = [c];
+      }
+    }
+  }
+  if (currentCol.length > 0) majorCols.push(currentCol);
+
+  // 6. Sort columns Right-to-Left (since dir="rtl", Col 1 is on the right)
+  majorCols.sort((a, b) => b[0].x - a[0].x);
+
+  // 7. For each major column, group into Rows (Questions) by Y
+  const orderedQuestions = [];
+  for (const mCol of majorCols) {
+    mCol.sort((a, b) => a.y - b.y);
+    let qRows = [];
+    let currentRow = [];
+    for (const c of mCol) {
+      if (currentRow.length === 0) {
         currentRow.push(c);
       } else {
-        rows.push(currentRow);
-        currentRow = [c];
+        const avgY = currentRow.reduce((s, box) => s + box.y, 0) / currentRow.length;
+        if (Math.abs(c.y - avgY) < 15) {
+          currentRow.push(c);
+        } else {
+          qRows.push(currentRow);
+          currentRow = [c];
+        }
       }
     }
-  }
-  if (currentRow.length > 0) rows.push(currentRow);
+    if (currentRow.length > 0) qRows.push(currentRow);
 
-  const questions = [];
-  for (const row of rows) {
-    row.sort((a, b) => a.x - b.x);
-    let currentQ = [];
-    for (let i = 0; i < row.length; i++) {
-      currentQ.push(row[i]);
-      if (i < row.length - 1 && row[i + 1].x - row[i].x > 70) {
-        questions.push(currentQ);
-        currentQ = [];
-      }
-    }
-    if (currentQ.length > 0) questions.push(currentQ);
-  }
-
-  // 6. Sort into RTL Columns
-  const cols = [];
-  for (const q of questions) {
-    let placed = false;
-    for (const col of cols) {
-      if (Math.abs(q[0].x - col[0][0].x) < 100) {
-        // Using 100 to separate dense columns securely
-        col.push(q);
-        placed = true;
-        break;
-      }
-    }
-    if (!placed) cols.push([q]);
-  }
-
-  // Sort columns Right-to-Left
-  cols.sort((a, b) => b[0][0].x - a[0][0].x);
-
-  const orderedQuestions = [];
-  for (const col of cols) {
-    // Sort questions within column Top-to-Bottom
-    col.sort((a, b) => a[0].y - b[0].y);
-    for (const q of col) {
-      orderedQuestions.push(q);
+    // Sort A, B, C, D left-to-right (A is left-most in dir="ltr" inside the options)
+    // Wait, the options in HTML: 
+    // <div style="display: flex; gap: 8px; direction: ltr;">
+    // A, B, C, D. So A is left-most, D is right-most.
+    for (const r of qRows) {
+      r.sort((a, b) => a.x - b.x);
+      orderedQuestions.push(r);
     }
   }
 

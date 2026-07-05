@@ -269,7 +269,7 @@ export default function Exams() {
                 </div>
               </div>
               
-              <div style="flex-grow: 1; display: grid; grid-template-columns: repeat(${cols}, 1fr); gap: ${gap}; align-content: start;">
+              <div style="flex-grow: 1; display: grid; grid-template-columns: repeat(${cols}, 1fr); grid-template-rows: repeat(15, min-content); grid-auto-flow: column; gap: ${gap}; align-content: start;">
                 ${pageQuestions
                   .map(
                     (qInfo: any, index: number) => `
@@ -300,7 +300,7 @@ export default function Exams() {
       const generateQuestionPages = (studentName?: string) => {
         let pagesHtml = "";
         pagesHtml += `
-            <div class="page" style="width: 210mm; height: auto; min-height: 297mm; padding: 15mm; box-sizing: border-box; background: white; position: relative; page-break-after: always; break-after: page; page-break-inside: avoid; break-inside: avoid;">
+            <div class="page" style="width: 210mm; height: auto; min-height: 297mm; padding: 15mm; box-sizing: border-box; background: white; position: relative; page-break-after: always; break-after: page;">
               <div style="text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px;">
                 <div style="font-size: 20px; font-weight: bold;">ورقة الأسئلة - ${exam.title}</div>
                 ${studentName ? `<div style="font-size: 14px;">الطالب: ${studentName}</div>` : ""}
