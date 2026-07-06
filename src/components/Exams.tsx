@@ -209,7 +209,7 @@ export default function Exams() {
 
       // 1. Generate Answer Sheet HTML for a student
       const generateAnswerSheet = async (student: any) => {
-        const MAX_ANSWERS_PER_PAGE = 60;
+        const MAX_ANSWERS_PER_PAGE = 80;
         const answerPagesCount =
           Math.ceil(exam.questions.length / MAX_ANSWERS_PER_PAGE) || 1;
         let htmlPages = [];
@@ -228,16 +228,17 @@ export default function Exams() {
           const canvas = document.createElement("canvas");
           JsBarcode(canvas, barcodeData, {
             format: "CODE128",
-            displayValue: false,
-            height: 35,
+            displayValue: true,
+            height: 50,
             width: 2,
-            margin: 0,
+            margin: 10,
+            fontSize: 14
           });
           const barcodeDataUrl = canvas.toDataURL("image/png");
 
           let cols = 4;
-          let gap = "10px";
-          let bubbleSize = "15px";
+          let gap = "5px";
+          let bubbleSize = "18px";
           let padding = "3px 0";
 
           htmlPages.push(`
@@ -249,9 +250,8 @@ export default function Exams() {
               </div>
               
               <div style="text-align: center; margin-bottom: 15px;">
-                 <img src="${barcodeDataUrl}" style="width: 100%; height: 35px; display: block;" alt="Barcode" />
+                 <img src="${barcodeDataUrl}" style="max-width: 100%; height: auto; display: inline-block;" alt="Barcode" />
               </div>
-
               <div style="display: flex; justify-content: space-between; margin-bottom: 15px; align-items: flex-start; gap: 10px;">
                 <div style="flex: 1; font-size: 14px; line-height: 1.6; text-align: right;">
                   <div><strong>اسم الطالب:</strong> ${student.name}</div>
@@ -269,7 +269,7 @@ export default function Exams() {
                 </div>
               </div>
               
-              <div style="flex-grow: 1; display: grid; grid-template-columns: repeat(${cols}, 1fr); grid-template-rows: repeat(15, min-content); grid-auto-flow: column; gap: ${gap}; align-content: start;">
+              <div style="flex-grow: 1; display: grid; grid-template-columns: repeat(${cols}, 1fr); grid-template-rows: repeat(20, min-content); grid-auto-flow: column; gap: ${gap}; align-content: start;">
                 ${pageQuestions
                   .map(
                     (qInfo: any, index: number) => `
@@ -301,11 +301,11 @@ export default function Exams() {
         let pagesHtml = "";
         pagesHtml += `
             <div class="page" style="width: 210mm; height: auto; min-height: 297mm; padding: 15mm; box-sizing: border-box; background: white; position: relative; page-break-after: always; break-after: page;">
-              <div style="text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px;">
+              <div style="text-align: center; border-bottom: 3px double #000; padding-bottom: 15px; margin-bottom: 25px;">
                 <div style="font-size: 20px; font-weight: bold;">ورقة الأسئلة - ${exam.title}</div>
                 ${studentName ? `<div style="font-size: 14px;">الطالب: ${studentName}</div>` : ""}
               </div>
-              <div>
+              <div style="border-bottom: 3px double #000; padding-bottom: 20px; margin-bottom: 20px;">
                 ${exam.questions
                   .map(
                     (qInfo: any) => `

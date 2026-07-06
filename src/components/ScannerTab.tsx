@@ -475,7 +475,9 @@ export default function ScannerTab() {
                 <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 w-full h-full object-cover"></video>
                 <canvas ref={canvasRef} className="hidden"></canvas>
                 <div className="absolute inset-4 border-2 border-dashed border-blue-500/50 rounded-lg pointer-events-none"></div>
-                
+                <div className="absolute bottom-6 left-0 right-0 text-center text-white/90 text-sm bg-black/60 py-2 px-4 mx-8 rounded-full pointer-events-none backdrop-blur-sm border border-white/10">
+                  تأكد من إضاءة الغرفة. ضع الباركود والدوائر بوضوح داخل الإطار.
+                </div>
                 {isGrading && (
                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center flex-col z-10">
                       <div className="w-10 h-10 border-4 border-white border-t-transparent rounded-full animate-spin mb-4"></div>
