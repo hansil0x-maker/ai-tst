@@ -8,13 +8,15 @@ import { Toaster } from 'react-hot-toast';
 import toast from 'react-hot-toast';
 import LockScreen from './components/LockScreen';
 import MainLayout from './components/MainLayout';
+import StudentRoom from './components/StudentRoom';
 // @ts-ignore
 import { registerSW } from 'virtual:pwa-register';
 import { exportDB } from 'dexie-export-import';
 import { db } from './db/db';
 
 export default function App() {
-  const [role, setRole] = useState<'dashboard' | 'grader' | 'school' | null>(null);
+  const [role, setRole] = useState<'dashboard' | 'grader' | 'school' | 'student' | null>(null);
+  const [studentData, setStudentData] = useState<{token: string, name: string} | null>(null);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
   useEffect(() => {
@@ -66,7 +68,7 @@ export default function App() {
   if (!role) {
     return (
       <>
-        <LockScreen onUnlocked={(r) => setRole(r)} />
+        <LockScreen onUnlocked={(r, payload) => { setRole(r); if (payload) setStudentData(payload); }} />
         <Toaster position="top-center" toastOptions={{ style: { background: '#1e293b', color: '#f8fafc', border: '1px solid #334155' } }} />
       </>
     );
@@ -74,7 +76,11 @@ export default function App() {
 
   return (
     <>
-      <MainLayout role={role} onLock={() => setRole(null)} />
+      role === 'student' ? (
+        <StudentRoom studentData={studentData} onExit={() => setRole(null)} />
+      ) : (
+        <MainLayout role={role} onLock={() => setRole(null)} />
+      )
       <Toaster position="top-center" toastOptions={{ style: { background: '#1e293b', color: '#f8fafc', border: '1px solid #334155' } }} />
     </>
   );

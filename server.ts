@@ -35,33 +35,125 @@ async function startServer() {
   });
 
   // ---- Socket WebSockets (Hub logic) ----
+    // --- Local Wi-Fi Exam Network State ---
+  const activeSessions = new Map(); // token -> { teacherId, students: [] }
+  const submissionQueues = new Map(); // token -> []
+
   io.on('connection', (socket) => {
     console.log('A client connected. ID: ', socket.id);
 
-    socket.on('join_room', (roomId, role) => {
-      socket.join(roomId);
-      console.log(`Socket ${socket.id} joined room ${roomId} as ${role}`);
+    // Teacher creates a new exam session
+    socket.on('create_session', (data, callback) => {
+      const token = Math.floor(100000 + Math.random() * 900000).toString();
+      activeSessions.set(token, { teacherId: socket.id, students: [] });
+      socket.join(token);
+      console.log(`Teacher created session ${token}`);
+      if (callback) callback({ success: true, token });
     });
 
-    // Dashboard broadcasts an exam to graders
-    socket.on('broadcast_exam', (data) => {
-      socket.to(data.roomId).emit('new_exam_received', data.exam);
-      console.log(`Broadcasted exam to room ${data.roomId}`);
+    // Student joins a session using the one-time token
+    socket.on('join_session', (data, callback) => {
+      const { token, student } = data;
+      const session = activeSessions.get(token);
+      
+      if (!session) {
+        if (callback) callback({ success: false, error: 'رمز الجلسة غير صحيح أو الجلسة منتهية' });
+        return;
+      }
+      
+      const studentData = { id: socket.id, ...student, connectedAt: Date.now() };
+      session.students.push(studentData);
+      socket.join(token);
+      
+      // Notify teacher
+      socket.to(session.teacherId).emit('student_joined', studentData);
+      console.log(`Student joined session ${token}`);
+      if (callback) callback({ success: true });
     });
 
-    // Grader sends results back to dashboard
-    socket.on('send_results', (data) => {
-      socket.to(data.roomId).emit('results_received', data.results);
-      console.log(`Send results to room ${data.roomId}`);
+    // Teacher sends exam to connected students
+    socket.on('send_exam', (data) => {
+      const { token, examPayload } = data;
+      // Emit only to students (everyone in the room except the sender)
+      socket.to(token).emit('receive_exam', examPayload);
+      console.log(`Exam sent to session ${token}`);
     });
 
-    // Generic state sync across devices
-    socket.on('sync_data', (data) => {
-      socket.to(data.roomId).emit('data_synced', data.payload);
+    // Student submits exam
+    
+    socket.on('request_early_submit', (data) => {
+      const { token, student } = data;
+      const session = activeSessions.get(token);
+      if (session) {
+        socket.to(session.teacherId).emit('student_early_submit_request', { student, socketId: socket.id });
+      }
+    });
+
+    socket.on('approve_early_submit', (data) => {
+      const { studentSocketId } = data;
+      io.to(studentSocketId).emit('early_submit_approved');
+    });
+
+    socket.on('cheat_alert', (data) => {
+      const { token, student, reason } = data;
+      const session = activeSessions.get(token);
+      if (session) {
+        socket.to(session.teacherId).emit('student_cheat_alert', { student, reason });
+      }
+    });
+socket.on('submit_exam', (data) => {
+      const { token, payload } = data;
+      const session = activeSessions.get(token);
+      if (session) {
+        // Implement backend submission queue to prevent frame drops
+        if (!submissionQueues.has(token)) {
+          submissionQueues.set(token, []);
+          
+          // Start the staggered queue processor for this session
+          const processQueue = () => {
+            const queue = submissionQueues.get(token);
+            if (queue && queue.length > 0) {
+              const nextSubmission = queue.shift();
+              io.to(session.teacherId).emit('student_submission', nextSubmission);
+              
+              if (queue.length > 0) {
+                setTimeout(processQueue, 300); // 300ms staggered delay
+              } else {
+                submissionQueues.delete(token); // Queue empty
+              }
+            } else {
+              submissionQueues.delete(token);
+            }
+          };
+          
+          submissionQueues.get(token).push(payload);
+          setTimeout(processQueue, 300);
+        } else {
+          submissionQueues.get(token).push(payload);
+        }
+        console.log(`Exam submitted in session ${token}`);
+      }
     });
 
     socket.on('disconnect', () => {
       console.log('User disconnected', socket.id);
+      // Clean up sessions if teacher disconnects
+      for (const [token, session] of activeSessions.entries()) {
+        if (session.teacherId === socket.id) {
+          socket.to(token).emit('session_closed');
+          activeSessions.delete(token);
+          submissionQueues.delete(token);
+          console.log(`Session ${token} closed due to teacher disconnect`);
+        } else {
+          // Notify teacher if student disconnects
+          const studentIdx = session.students.findIndex(s => s.id === socket.id);
+          if (studentIdx !== -1) {
+             const student = session.students[studentIdx];
+             session.students.splice(studentIdx, 1);
+             io.to(session.teacherId).emit('student_left', { id: socket.id });
+          }
+        }
+      }
     });
   });
 
@@ -76,9 +168,9 @@ async function startServer() {
     }
   });
 
-  app.post('/api/generate-exam', async (req, res) => {
+    app.post('/api/generate-exam', async (req, res) => {
     try {
-      const { prompt, content, files, pagesConfig, referenceExams } = req.body;
+      const { prompt, content, files, totalPages, questionCounts, previousQuestions } = req.body;
       const apiKey = process.env.GEMINI_API_KEY;
       
       if (!apiKey) {
@@ -86,20 +178,35 @@ async function startServer() {
       }
 
       let configPrompt = '';
-      if (pagesConfig === '1_page_1_face') configPrompt = 'Limit the exam to max 20 questions.';
-      if (pagesConfig === '1_page_2_faces') configPrompt = 'Generate around 40 questions if possible.';
-      if (pagesConfig === '2_pages_1_face') configPrompt = 'Generate around 40 well-distributed questions.';
-      if (pagesConfig === '2_pages_2_faces') configPrompt = 'Generate around 80 comprehensive questions.';
+      if (totalPages) {
+         configPrompt += `
+Target Length: Approximately ${totalPages} digital pages worth of content.
+`;
+      }
+      if (questionCounts) {
+         configPrompt += `
+Please strictly adhere to generating the following amounts of question types:
+`;
+         Object.entries(questionCounts).forEach(([type, count]) => {
+            if (count > 0) configPrompt += `- ${count} ${type} questions.
+`;
+         });
+      }
 
-      let referencePrompt = '';
-      if (referenceExams && referenceExams.length > 0) {
-         referencePrompt = `\n\n=== EXAMPLES OF HIGH QUALITY PAST EXAMS (Rated 5 Stars by the user) ===\nUse these as a style and quality reference:\n${JSON.stringify(referenceExams, null, 2)}`;
+      let avoidPrompt = '';
+      if (previousQuestions && previousQuestions.length > 0) {
+         avoidPrompt = `
+=== STRICT UNIQUENESS CONSTRAINT ===
+DO NOT generate any questions that are similar to the following questions previously generated:
+` + JSON.stringify(previousQuestions, null, 2);
       }
 
       const ai = new GoogleGenAI({ apiKey });
       
-      const fullPrompt = `You are an expert teacher. Generate a Multiple Choice Questions (MCQ) exam based on the provided content or files. This exam will be automatically printed on paper for students.
-${configPrompt}${referencePrompt}
+      const fullPrompt = `You are an expert teacher. Generate a comprehensive exam based on the provided content or files. 
+This exam will be delivered digitally via a local Wi-Fi PWA.
+${configPrompt}
+${avoidPrompt}
 
 Text Content:
 ${content || 'None'}
@@ -107,13 +214,25 @@ ${content || 'None'}
 Notes from teacher: ${prompt || 'None'}
 
 Please return ONLY a valid JSON object matching this structure:
-{ "questions": [...], "aiComment": "A brief Arabic comment to the teacher regarding the generated exam's quality or coverage." }
+{ 
+  "questions": [
+    {
+      "id": 1,
+      "type": "mcq | true_false | fill_blanks | short_answer | matching | image_labeling",
+      "text": "The question text",
+      "options": { "A": "...", "B": "..." }, // only for mcq
+      "correctAnswer": "The exact correct answer or key",
+      "matchingPairs": [ { "left": "...", "right": "..." } ], // only for matching
+      "imageDescription": "Description of image to label if applicable" // only for image_labeling
+    }
+  ], 
+  "aiComment": "A brief Arabic comment to the teacher regarding the generated exam's quality or coverage." 
+}
 Make sure it is perfect JSON.`;
 
-      const parts: any[] = [{ text: fullPrompt }];
-
+      const parts = [{ text: fullPrompt }];
       if (files && files.length > 0) {
-        files.forEach((f: any) => {
+        files.forEach((f) => {
            parts.push({
              inlineData: {
                data: f.data,
@@ -138,6 +257,7 @@ Make sure it is perfect JSON.`;
                   type: Type.OBJECT,
                   properties: {
                     id: { type: Type.INTEGER },
+                    type: { type: Type.STRING },
                     text: { type: Type.STRING },
                     options: {
                       type: Type.OBJECT,
@@ -146,12 +266,22 @@ Make sure it is perfect JSON.`;
                         B: { type: Type.STRING },
                         C: { type: Type.STRING },
                         D: { type: Type.STRING }
-                      },
-                      required: ["A", "B", "C", "D"]
+                      }
                     },
-                    correctAnswer: { type: Type.STRING }
+                    correctAnswer: { type: Type.STRING },
+                    matchingPairs: {
+                      type: Type.ARRAY,
+                      items: {
+                        type: Type.OBJECT,
+                        properties: {
+                          left: { type: Type.STRING },
+                          right: { type: Type.STRING }
+                        }
+                      }
+                    },
+                    imageDescription: { type: Type.STRING }
                   },
-                  required: ["id", "text", "options", "correctAnswer"]
+                  required: ["id", "type", "text", "correctAnswer"]
                 }
               }
             },
@@ -175,19 +305,18 @@ Make sure it is perfect JSON.`;
             throw new Error("No JSON structure found");
           }
         } catch (e2) {
-          console.error("Failed to parse Gemini output:", e2, "\nRAW OUTPUT:", rawText);
           throw new Error("تنسيق JSON غير صالح من الذكاء الاصطناعي. الرجاء المحاولة مرة أخرى.");
         }
       }
       
       res.json(json);
-    } catch (error: any) {
+    } catch (error) {
       console.error("AI Generation Error:", error);
       res.status(500).json({ error: error.message || 'Error generating exam' });
     }
   });
 
-  app.post('/api/generate-recommendation', async (req, res) => {
+app.post('/api/generate-recommendation', async (req, res) => {
     try {
       const { prompt } = req.body;
       const apiKey = process.env.GEMINI_API_KEY;

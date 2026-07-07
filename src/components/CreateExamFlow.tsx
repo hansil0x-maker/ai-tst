@@ -107,10 +107,17 @@ export default function CreateExamFlow({ onCancel, onComplete }: { onCancel: () 
          ratingComment: e.ratingComment
       }));
       
+      
+      // Prepare previous questions for AI Batching Engine
+      const startOfDay = new Date();
+      startOfDay.setHours(0,0,0,0);
+      const todaysExams = await db.exams.where('createdAt').aboveOrEqual(startOfDay.getTime()).toArray();
+      const previousQuestions = todaysExams.flatMap(e => e.questions.map(q => q.text));
+      
       const res = await fetch('/api/generate-exam', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: notes, content: contentBlock, files, printMode, duplexQuestionPages, referenceExams })
+        body: JSON.stringify({ prompt: notes, content: contentBlock, files, totalPages: printMode === 'booklet' ? 4 : undefined, previousQuestions })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'فشل التوليد');

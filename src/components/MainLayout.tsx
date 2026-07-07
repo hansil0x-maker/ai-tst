@@ -6,6 +6,8 @@ import Exams from './Exams';
 import ClassesStudents from './ClassesStudents';
 import ScannerTab from './ScannerTab';
 import SettingsTab from './SettingsTab';
+import LiveExamDashboard from './LiveExamDashboard';
+import { Wifi } from 'lucide-react';
 import { syncManager } from '../sync';
 
 export default function MainLayout({ role, onLock }: { role: 'dashboard' | 'grader' | 'school', onLock: () => void }) {
@@ -46,6 +48,7 @@ export default function MainLayout({ role, onLock }: { role: 'dashboard' | 'grad
       case 'dashboard': return <Dashboard />;
       case 'exams': return <Exams />;
       case 'students': return <ClassesStudents />;
+      case 'live': return <LiveExamDashboard />;
       case 'scan': return <ScannerTab />;
       case 'settings': return <SettingsTab />;
       default: return role === 'grader' ? <ScannerTab /> : <Dashboard />;
@@ -56,7 +59,8 @@ export default function MainLayout({ role, onLock }: { role: 'dashboard' | 'grad
     if (role === 'dashboard') {
       return [
         { id: 'dashboard', icon: <Home size={24} />, label: 'النتائج والتحليلات' },
-        { id: 'exams', icon: <FileText size={24} />, label: 'توليد و إرسال الامتحانات' },
+        { id: 'exams', icon: <FileText size={24} />, label: 'الامتحانات' },
+        { id: 'live', icon: <Wifi size={24} />, label: 'الشبكة المحلية' }
       ];
     } else if (role === 'grader') {
       return [
@@ -69,6 +73,7 @@ export default function MainLayout({ role, onLock }: { role: 'dashboard' | 'grad
       return [
         { id: 'dashboard', icon: <Home size={24} />, label: 'الرئيسية' },
         { id: 'exams', icon: <FileText size={24} />, label: 'الامتحانات' },
+        { id: 'live', icon: <Wifi size={24} />, label: 'الشبكة المحلية' },
         { id: 'scan', icon: <ScanLine size={24} />, label: 'المسح' },
         { id: 'students', icon: <Users size={24} />, label: 'البيانات' },
       ];
