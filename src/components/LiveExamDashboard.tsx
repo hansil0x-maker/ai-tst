@@ -21,7 +21,7 @@ export default function LiveExamDashboard() {
   const exams = useLiveQuery(() => db.exams.toArray());
 
   useEffect(() => {
-    const newSocket = io(window.location.protocol + '//' + window.location.hostname + ':3000');
+    const newSocket = io('/', { path: '/socket.io' });
     
     newSocket.on('connect', () => {
       // ready

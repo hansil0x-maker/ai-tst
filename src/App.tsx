@@ -76,11 +76,11 @@ export default function App() {
 
   return (
     <>
-      role === 'student' ? (
+      {role === 'student' ? (
         <StudentRoom studentData={studentData} onExit={() => setRole(null)} />
       ) : (
-        <MainLayout role={role} onLock={() => setRole(null)} />
-      )
+        <MainLayout role={role as 'dashboard' | 'grader' | 'school'} onLock={() => setRole(null)} />
+      )}
       <Toaster position="top-center" toastOptions={{ style: { background: '#1e293b', color: '#f8fafc', border: '1px solid #334155' } }} />
     </>
   );

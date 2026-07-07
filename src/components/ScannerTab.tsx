@@ -155,7 +155,7 @@ export default function ScannerTab() {
     setIsGrading(false);
   };
 
-  const handleCapturePaper = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCapturePaper = async (e: any) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
     
@@ -188,7 +188,7 @@ export default function ScannerTab() {
           if (ok) successCount++;
           resolve();
         };
-        reader.readAsDataURL(file);
+        reader.readAsDataURL(file as any);
       });
     }
     

@@ -38,7 +38,7 @@ export default function LockScreen({
       let currentTime = Date.now();
       try {
         const res = await fetch(
-          "http://worldtimeapi.org/api/timezone/Etc/UTC",
+          "https://worldtimeapi.org/api/timezone/Etc/UTC",
           { cache: "no-store" },
         );
         if (res.ok) {

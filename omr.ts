@@ -284,7 +284,7 @@ export async function gradeExamWithOMR(imageBase64, numQuestions) {
   return {
     serialNumber,
     answers,
-    page: qrData.page || 0,
+    page: 0,
     isPartial: pageQuestionsCount < numQuestions,
   };
 }

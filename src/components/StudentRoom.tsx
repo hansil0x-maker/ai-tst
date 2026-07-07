@@ -26,7 +26,7 @@ export default function StudentRoom({ studentData, onExit }: { studentData: any,
   const [cameraActive, setCameraActive] = useState(false);
 
   useEffect(() => {
-    const newSocket = io(window.location.protocol + '//' + window.location.hostname + ':3000');
+    const newSocket = io('/', { path: '/socket.io' });
     
     newSocket.on('connect', () => {
       newSocket.emit('join_session', { token: studentData.token, student: { name: studentData.name } }, (res: any) => {
@@ -74,7 +74,7 @@ export default function StudentRoom({ studentData, onExit }: { studentData: any,
 
   // Timer logic
   useEffect(() => {
-    if (status === 'active' && timeLeft > 0) {
+    if (status === 'active') {
       const timer = setInterval(() => {
         setTimeLeft(prev => {
           if (prev === Math.floor((exam?.duration || 60) * 60 / 2)) {
@@ -93,11 +93,11 @@ export default function StudentRoom({ studentData, onExit }: { studentData: any,
       }, 1000);
       return () => clearInterval(timer);
     }
-  }, [status, timeLeft, exam, socket]);
+  }, [status, exam, socket]);
 
   // Handover Countdown
   useEffect(() => {
-    if (status === 'submitted' && handoverCountdown > 0) {
+    if (status === 'submitted') {
       const timer = setInterval(() => {
         setHandoverCountdown(prev => {
           if (prev <= 1) {
@@ -110,7 +110,7 @@ export default function StudentRoom({ studentData, onExit }: { studentData: any,
       }, 1000);
       return () => clearInterval(timer);
     }
-  }, [status, handoverCountdown, onExit]);
+  }, [status, onExit]);
 
   const startCameraProctoring = async (activeSocket: Socket | null, student: any) => {
     try {

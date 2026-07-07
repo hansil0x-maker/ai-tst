@@ -188,7 +188,7 @@ Target Length: Approximately ${totalPages} digital pages worth of content.
 Please strictly adhere to generating the following amounts of question types:
 `;
          Object.entries(questionCounts).forEach(([type, count]) => {
-            if (count > 0) configPrompt += `- ${count} ${type} questions.
+            if ((count as number) > 0) configPrompt += `- ${count} ${type} questions.
 `;
          });
       }
@@ -230,7 +230,7 @@ Please return ONLY a valid JSON object matching this structure:
 }
 Make sure it is perfect JSON.`;
 
-      const parts = [{ text: fullPrompt }];
+      const parts: any[] = [{ text: fullPrompt }];
       if (files && files.length > 0) {
         files.forEach((f) => {
            parts.push({
