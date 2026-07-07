@@ -37,10 +37,13 @@ export default function LockScreen({
       // Time validation
       let currentTime = Date.now();
       try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 2000);
         const res = await fetch(
           "https://worldtimeapi.org/api/timezone/Etc/UTC",
-          { cache: "no-store" },
+          { cache: "no-store", signal: controller.signal }
         );
+        clearTimeout(timeoutId);
         if (res.ok) {
           const data = await res.json();
           currentTime = new Date(data.datetime).getTime();
