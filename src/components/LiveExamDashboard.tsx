@@ -99,7 +99,7 @@ export default function LiveExamDashboard() {
   };
 
   // Lock-step condition
-  const canStart = students.length === availableDevices;
+  const canStart = students.length > 0;
 
   return (
     <div className="space-y-6">

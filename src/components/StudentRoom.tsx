@@ -77,11 +77,15 @@ export default function StudentRoom({ studentData, onExit }: { studentData: any,
     if (status === 'active') {
       const timer = setInterval(() => {
         setTimeLeft(prev => {
-          if (prev === Math.floor((exam?.duration || 60) * 60 / 2)) {
-            toast('انقضى نصف الوقت. حافظ على تركيزك.', { icon: '⏳' });
+          const halfTime = Math.floor((exam?.duration || 60) * 60 / 2);
+          if (prev === halfTime) {
+            toast('انقضى نصف الوقت', { icon: '⏳' });
           }
-          if (prev === 10 * 60) {
-            toast('متبقي 10 دقائق فقط. راجع إجاباتك.', { icon: '⏰' });
+          if (prev === Math.floor(halfTime * 0.75)) {
+            toast('خذ نفساً عميقاً وحافظ على تركيزك (Take a deep breath and focus)', { icon: '🌿' });
+          }
+          if (prev === 10 * 60 && (exam?.duration || 60) > 10) {
+            toast('10 دقائق متبقية (10 minutes remaining)', { icon: '⏰' });
           }
           if (prev <= 1) {
             clearInterval(timer);
@@ -127,19 +131,26 @@ export default function StudentRoom({ studentData, onExit }: { studentData: any,
       if ('FaceDetector' in window) {
         // @ts-ignore
         const faceDetector = new FaceDetector();
+        let lastFaceSeen = Date.now();
         setInterval(async () => {
           if (!videoRef.current || videoRef.current.readyState !== 4) return;
           try {
             const faces = await faceDetector.detect(videoRef.current);
             if (faces.length === 0) {
-              activeSocket?.emit('cheat_alert', { token: studentData.token, student, reason: 'لم يتم اكتشاف وجه (الطالب لا ينظر للشاشة)' });
-            } else if (faces.length > 1) {
-              activeSocket?.emit('cheat_alert', { token: studentData.token, student, reason: 'تم اكتشاف أكثر من وجه في الكاميرا' });
+              if (Date.now() - lastFaceSeen > 3000) {
+                 activeSocket?.emit('cheat_alert', { token: studentData.token, student: studentData, reason: 'لم يتم اكتشاف وجه (الطالب لا ينظر للشاشة لأكثر من 3 ثوانٍ)' });
+                 lastFaceSeen = Date.now(); // reset to avoid spamming
+              }
+            } else {
+              lastFaceSeen = Date.now();
+              if (faces.length > 1) {
+                activeSocket?.emit('cheat_alert', { token: studentData.token, student: studentData, reason: 'تم اكتشاف أكثر من وجه في الكاميرا' });
+              }
             }
           } catch (e) {
             // Ignore error
           }
-        }, 3000);
+        }, 1000); // check more frequently, alert if absent for > 3s
       }
     } catch (err) {
       console.warn("Camera access denied or unavailable", err);

@@ -1,6 +1,7 @@
 import cvInit from "@techstark/opencv-js";
 import { Jimp } from "jimp";
-import { MultiFormatReader, BarcodeFormat, DecodeHintType, RGBLuminanceSource, BinaryBitmap, HybridBinarizer, GlobalHistogramBinarizer } from '@zxing/library';
+import ZXing from '@zxing/library';
+const { MultiFormatReader, BarcodeFormat, DecodeHintType, RGBLuminanceSource, BinaryBitmap, HybridBinarizer, GlobalHistogramBinarizer } = ZXing;
 
 let cv = null;
 
