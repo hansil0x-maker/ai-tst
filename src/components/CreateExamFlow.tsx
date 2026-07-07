@@ -20,9 +20,9 @@ export default function CreateExamFlow({ onCancel, onComplete }: { onCancel: () 
   const [examDate, setExamDate] = useState(new Date().toISOString().split('T')[0]);
   const [notes, setNotes] = useState('');
   const [contentBlock, setContentBlock] = useState('');
-  const [printMode, setPrintMode] = useState<'economic'|'duplex'|'booklet'>('economic');
-  const [printQuestionsPerStudent, setPrintQuestionsPerStudent] = useState(false);
-  const [duplexQuestionPages, setDuplexQuestionPages] = useState(2);
+  const [totalQuestions, setTotalQuestions] = useState(10);
+  const [autoDistribute, setAutoDistribute] = useState(true);
+  const [qTypes, setQTypes] = useState({ mcq: 5, tf: 5, fill: 0, short: 0, match: 0, diagram: 0 });
   
   const [files, setFiles] = useState<{name: string, data: string, mimeType: string}[]>([]);
   
@@ -117,7 +117,7 @@ export default function CreateExamFlow({ onCancel, onComplete }: { onCancel: () 
       const res = await fetch('/api/generate-exam', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: notes, content: contentBlock, files, totalPages: printMode === 'booklet' ? 4 : undefined, previousQuestions })
+        body: JSON.stringify({ prompt: notes, content: contentBlock, files, totalQuestions, autoDistribute, qTypes, previousQuestions })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'فشل التوليد');
@@ -270,49 +270,56 @@ export default function CreateExamFlow({ onCancel, onComplete }: { onCancel: () 
           </div>
 
           <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700">
-            <h3 className="text-lg font-semibold mb-4 text-white">تنسيق طباعة الامتحان</h3>
+            <h3 className="text-lg font-semibold mb-4 text-white">إعدادات أسئلة الامتحان</h3>
             
             <div className="space-y-4">
               <div>
-                <label className="block text-sm text-slate-400 mb-2">اختر طريقة الطباعة</label>
-                <select value={printMode} onChange={e=>setPrintMode(e.target.value as 'economic'|'duplex'|'booklet')} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none">
-                  <option value="economic">المنفصل (الاقتصادي) - ورقة إجابة منفصلة لكل طالب</option>
-                  <option value="duplex">الوجهين (Duplex) - ورقة الإجابة مع الأسئلة لكل طالب</option>
-                  <option value="booklet">الكُتيب (Booklet) - دفتر امتحاني مطوي</option>
-                </select>
+                <label className="block text-sm text-slate-400 mb-2">إجمالي عدد الأسئلة</label>
+                <input type="number" min="1" value={totalQuestions} onChange={e=>setTotalQuestions(parseInt(e.target.value) || 1)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none" />
               </div>
-
-              {printMode === 'economic' && (
-                <div className="flex items-center gap-2 p-3 bg-slate-900 rounded-xl border border-slate-700">
+              <div className="flex items-center gap-2 p-3 bg-slate-900 rounded-xl border border-slate-700">
                   <input 
                     type="checkbox" 
-                    id="printQs" 
-                    checked={printQuestionsPerStudent} 
-                    onChange={e => setPrintQuestionsPerStudent(e.target.checked)}
+                    id="autoDist" 
+                    checked={autoDistribute} 
+                    onChange={e => setAutoDistribute(e.target.checked)}
                     className="w-4 h-4 text-blue-600 bg-slate-800 border-slate-600 rounded focus:ring-blue-500"
                   />
-                  <label htmlFor="printQs" className="text-sm text-slate-300">
-                    هل تريد طباعة ورقة أسئلة مخصصة لكل طالب؟ (افتراضياً: تطبع مرة واحدة للمعلم)
+                  <label htmlFor="autoDist" className="text-sm text-slate-300">
+                    توزيع الأنواع تلقائياً عبر الذكاء الاصطناعي
                   </label>
-                </div>
-              )}
-
-              {printMode === 'duplex' && (
-                <div>
-                  <label className="block text-sm text-slate-400 mb-2">عدد الأوجه المخصصة للأسئلة فقط</label>
-                  <select value={duplexQuestionPages} onChange={e=>setDuplexQuestionPages(Number(e.target.value))} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none">
-                    <option value={1}>وجه واحد للأسئلة (إجمالي ورقة واحدة وجه وظهر لكل طالب)</option>
-                    <option value={3}>3 أوجه للأسئلة (إجمالي ورقتين لكل طالب)</option>
-                    <option value={5}>5 أوجه للأسئلة (إجمالي 3 ورقات لكل طالب)</option>
-                  </select>
-                  <p className="text-xs text-slate-500 mt-2">
-                    ملاحظة: ورقة الإجابة ستكون دائماً هي الصفحة الأولى (الوجه الأول).
-                  </p>
+              </div>
+              
+              {!autoDistribute && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2">
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">اختيار من متعدد</label>
+                    <input type="number" min="0" value={qTypes.mcq} onChange={e=>setQTypes({...qTypes, mcq: parseInt(e.target.value)||0})} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">صح أو خطأ</label>
+                    <input type="number" min="0" value={qTypes.tf} onChange={e=>setQTypes({...qTypes, tf: parseInt(e.target.value)||0})} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">أكمل الفراغ</label>
+                    <input type="number" min="0" value={qTypes.fill} onChange={e=>setQTypes({...qTypes, fill: parseInt(e.target.value)||0})} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">أجب</label>
+                    <input type="number" min="0" value={qTypes.short} onChange={e=>setQTypes({...qTypes, short: parseInt(e.target.value)||0})} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">توصيل / جدول</label>
+                    <input type="number" min="0" value={qTypes.match} onChange={e=>setQTypes({...qTypes, match: parseInt(e.target.value)||0})} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">رسم / صورة</label>
+                    <input type="number" min="0" value={qTypes.diagram} onChange={e=>setQTypes({...qTypes, diagram: parseInt(e.target.value)||0})} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white outline-none" />
+                  </div>
                 </div>
               )}
             </div>
           </div>
-
           <div>
             <label className="block text-sm text-slate-400 mb-1">ملاحظات إضافية</label>
             <input type="text" value={notes} onChange={e=>setNotes(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none mb-3" placeholder="مثال: قم بإنشاء 10 أسئلة صعبة جداً..." />
@@ -350,9 +357,7 @@ export default function CreateExamFlow({ onCancel, onComplete }: { onCancel: () 
 
           {errorMsg && <div className="p-4 bg-red-900/30 border border-red-800 text-red-200 rounded-xl text-sm">{errorMsg}</div>}
 
-          <div className="p-4 bg-yellow-900/20 border border-yellow-800/50 text-yellow-200/80 rounded-xl text-sm mb-4">
-            💡 ملاحظة: الحد الأقصى لعدد الأسئلة في كل ورقة إجابة (وجه واحد) هو 60 سؤالاً. سيتم توزيع الأسئلة الإضافية على صفحات إجابة جديدة تلقائياً.
-          </div>
+          
 
           <button onClick={handleGenerate} disabled={isGenerating} className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium py-4 rounded-xl transition-colors flex items-center justify-center space-x-2 space-x-reverse">
             {isGenerating ? <Loader2 className="animate-spin" /> : <Sparkles />}

@@ -170,27 +170,26 @@ socket.on('submit_exam', (data) => {
 
     app.post('/api/generate-exam', async (req, res) => {
     try {
-      const { prompt, content, files, totalPages, questionCounts, previousQuestions } = req.body;
+      const { prompt, content, files, totalQuestions, autoDistribute, qTypes, previousQuestions } = req.body;
       const apiKey = process.env.GEMINI_API_KEY;
       
       if (!apiKey) {
         return res.status(500).json({ error: 'GEMINI_API_KEY is missing' });
       }
 
-      let configPrompt = '';
-      if (totalPages) {
+      let configPrompt = `Target Total Questions: ${totalQuestions || 10}\n`;
+      if (!autoDistribute && qTypes) {
          configPrompt += `
-Target Length: Approximately ${totalPages} digital pages worth of content.
-`;
-      }
-      if (questionCounts) {
+Please STRICTLY adhere to generating the following amounts of question types. The total must sum to ${totalQuestions}. Do not generate any other types:
+- ${qTypes.mcq} Multiple Choice questions (type: mcq)
+- ${qTypes.tf} True/False questions (type: true_false)
+- ${qTypes.fill} Fill in the Blanks questions (type: fill_blanks)
+- ${qTypes.short} Short Answer questions (type: short_answer)
+- ${qTypes.match} Matching questions (type: matching)
+- ${qTypes.diagram} Label Diagram questions (type: image_labeling)\n`;
+      } else {
          configPrompt += `
-Please strictly adhere to generating the following amounts of question types:
-`;
-         Object.entries(questionCounts).forEach(([type, count]) => {
-            if ((count as number) > 0) configPrompt += `- ${count} ${type} questions.
-`;
-         });
+Please automatically distribute the ${totalQuestions || 10} questions among the 6 supported types based on what fits the content best: mcq, true_false, fill_blanks, short_answer, matching, image_labeling.\n`;
       }
 
       let avoidPrompt = '';
