@@ -107,10 +107,11 @@ export default function Dashboard() {
         classMap.set(cId, { classId: cId, studentScores: new Map() });
       }
       const sMap = classMap.get(cId).studentScores;
-      if (!sMap.has(r.studentId)) {
+      const sid = r.studentId || r.studentName;
+      if (!sMap.has(sid)) {
         sMap.set(r.studentId, { totalPercentage: 0, count: 0 });
       }
-      const sData = sMap.get(r.studentId);
+      const sData = sMap.get(sid);
       sData.totalPercentage += r.percentage;
       sData.count += 1;
     });
@@ -121,7 +122,7 @@ export default function Dashboard() {
       if (!classObj) return;
       
       const studentAverages = Array.from(v.studentScores.entries()).map(([sId, data]: any) => {
-        const studentObj = students.find(s => s.id === sId);
+        const studentObj = typeof sId === 'number' ? students.find(s => s.id === sId) : { name: sId };
         return {
           studentId: sId,
           name: studentObj?.name || 'غير معروف',
@@ -264,11 +265,12 @@ export default function Dashboard() {
     }
     
     const data = filteredResults.map(r => {
-      const st = students.find(s => s.id === r.studentId);
+      const st = r.studentId ? students.find(s => s.id === r.studentId) : null;
+      const studentDisplayName = st?.name || r.studentName || 'غير معروف';
       const ex = exams.find(e => e.id === r.examId);
       const cl = classes.find(c => c.id === st?.classId);
       return {
-        'الطالب': st?.name || 'غير معروف',
+        'الطالب': studentDisplayName,
         'الرقم التسلسلي': st?.serialNumber || '-',
         'الصف': cl?.name || '-',
         'الامتحان': ex?.title || '-',
@@ -495,12 +497,13 @@ export default function Dashboard() {
            ) : (
              <div className="divide-y divide-slate-700">
                {filteredResults.slice(0, visibleResults).map(r => {
-                 const st = students.find(s => s.id === r.studentId);
+                 const st = r.studentId ? students.find(s => s.id === r.studentId) : null;
+                 const studentDisplayName = st?.name || r.studentName || 'غير معروف';
                  const ex = exams.find(e => e.id === r.examId);
                  return (
                    <div key={r.id} className="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center hover:bg-slate-700/30 transition-colors">
                       <div className="mb-2 sm:mb-0">
-                        <p className="font-semibold text-white">{st?.name || 'طالب غير معروف'}</p>
+                        <p className="font-semibold text-white">{studentDisplayName}</p>
                         <p className="text-sm text-slate-400">{ex?.title || 'امتحان غير معروف'} • {ex?.subject}</p>
                         {r.isCheatSuspected && <span className="inline-flex items-center space-x-1 space-x-reverse text-xs text-red-500 bg-red-900/40 px-2 py-0.5 rounded mt-1"><AlertTriangle size={12}/> <span>حالة غش محتملة</span></span>}
                       </div>

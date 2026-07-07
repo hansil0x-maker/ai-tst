@@ -46,12 +46,14 @@ export interface Exam {
 export interface Result {
   id?: number;
   examId: number;
-  studentId: number;
+  studentId: number | null;
+  studentName?: string;
   scannedAnswers: Record<number, string>;
   score: number;
   percentage: number;
   category: 'Pass' | 'Fail' | 'Perfect';
   isCheatSuspected: boolean;
+  needsGrading?: boolean;
 }
 
 export interface Analysis {
