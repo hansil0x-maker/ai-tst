@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
-import { ArrowLeft, Loader2, Sparkles, Check, CheckSquare, UploadCloud, X, ChevronRight, ChevronLeft, Star } from 'lucide-react';
+import { ArrowLeft, Loader2, Sparkles, Check, CheckSquare, UploadCloud, X, ChevronRight, ChevronLeft, Star, ListChecks, CheckCircle, AlignLeft, PenLine, GitCompare, ImageIcon } from 'lucide-react';
 import type { Question } from '../types';
 import toast from 'react-hot-toast';
 
@@ -22,7 +22,17 @@ export default function CreateExamFlow({ onCancel, onComplete }: { onCancel: () 
   const [contentBlock, setContentBlock] = useState('');
   const [totalQuestions, setTotalQuestions] = useState(10);
   const [autoDistribute, setAutoDistribute] = useState(true);
-  const [qTypes, setQTypes] = useState({ mcq: 5, tf: 5, fill: 0, short: 0, match: 0, diagram: 0 });
+  const [qTypes, setQTypes] = useState({ mcq: 0, tf: 0, fill: 0, short: 0, match: 0, diagram: 0 });
+  const [enabledTypes, setEnabledTypes] = useState({ mcq: true, tf: true, fill: false, short: false, match: false, diagram: false });
+  
+  const QUESTION_TYPE_DEFS = [
+    { key: 'mcq',     label: 'اختيار من متعدد',            icon: <ListChecks size={20} />,    color: 'blue' },
+    { key: 'tf',      label: 'صح أو خطأ',                  icon: <CheckCircle size={20} />,   color: 'emerald' },
+    { key: 'fill',    label: 'أكمل الفراغ',                icon: <AlignLeft size={20} />,     color: 'violet' },
+    { key: 'short',   label: 'أجب عن السؤال',              icon: <PenLine size={20} />,       color: 'amber' },
+    { key: 'match',   label: 'الجدول / الكلمة الصحيحة',    icon: <GitCompare size={20} />,    color: 'rose' },
+    { key: 'diagram', label: 'سمِّ أجزاء الرسم / الصورة', icon: <ImageIcon size={20} />,     color: 'cyan' },
+  ] as const;
   
   const [files, setFiles] = useState<{name: string, data: string, mimeType: string}[]>([]);
   
@@ -114,10 +124,19 @@ export default function CreateExamFlow({ onCancel, onComplete }: { onCancel: () 
       const todaysExams = await db.exams.where('createdAt').aboveOrEqual(startOfDay.getTime()).toArray();
       const previousQuestions = todaysExams.flatMap(e => e.questions.map(q => q.text));
       
+      // Build effective qTypes from enabled types only
+      const effectiveQTypes = autoDistribute
+        ? Object.fromEntries(
+            Object.entries(enabledTypes).filter(([, v]) => v).map(([k]) => [k, 0])
+          )
+        : Object.fromEntries(
+            Object.entries(qTypes).filter(([k]) => enabledTypes[k as keyof typeof enabledTypes])
+          );
+
       const res = await fetch('/api/generate-exam', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: notes, content: contentBlock, files, totalQuestions, autoDistribute, qTypes, previousQuestions })
+        body: JSON.stringify({ prompt: notes, content: contentBlock, files, totalQuestions, autoDistribute, qTypes: effectiveQTypes, enabledTypes, previousQuestions })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'فشل التوليد');
@@ -197,9 +216,6 @@ export default function CreateExamFlow({ onCancel, onComplete }: { onCancel: () 
       rating,
       ratingComment,
       academicYear: currentSettings?.academicYear || '2026-2027',
-      printMode,
-      printQuestionsPerStudent,
-      duplexQuestionPages
     } as any);
     
     toast.success('تم اعتماد وحفظ الامتحان!');
@@ -270,7 +286,8 @@ export default function CreateExamFlow({ onCancel, onComplete }: { onCancel: () 
           </div>
 
           <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700">
-            <h3 className="text-lg font-semibold mb-4 text-white">إعدادات أسئلة الامتحان</h3>
+            <h3 className="text-lg font-semibold mb-1 text-white">إعدادات أسئلة الامتحان</h3>
+            <p className="text-xs text-slate-500 mb-4">حدد أنواع الأسئلة المطلوبة وعددها. يمكنك تفعيل كل نوع والتوزيع يدوياً، أو ترك الذكاء الاصطناعي يوزع تلقائياً.</p>
             
             <div className="space-y-4">
               <div>
@@ -290,32 +307,78 @@ export default function CreateExamFlow({ onCancel, onComplete }: { onCancel: () 
                   </label>
               </div>
               
+              {/* Question Types Selector */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                {QUESTION_TYPE_DEFS.map(({ key, label, icon, color }) => {
+                  const isEnabled = enabledTypes[key as keyof typeof enabledTypes];
+                  const count = qTypes[key as keyof typeof qTypes];
+                  const colorMap: Record<string, string> = {
+                    blue:    'border-blue-500/60 bg-blue-900/20 text-blue-300',
+                    emerald: 'border-emerald-500/60 bg-emerald-900/20 text-emerald-300',
+                    violet:  'border-violet-500/60 bg-violet-900/20 text-violet-300',
+                    amber:   'border-amber-500/60 bg-amber-900/20 text-amber-300',
+                    rose:    'border-rose-500/60 bg-rose-900/20 text-rose-300',
+                    cyan:    'border-cyan-500/60 bg-cyan-900/20 text-cyan-300',
+                  };
+                  const activeClass = colorMap[color];
+                  return (
+                    <div
+                      key={key}
+                      className={`rounded-xl border-2 p-3 transition-all cursor-pointer select-none ${
+                        isEnabled
+                          ? activeClass
+                          : 'border-slate-700 bg-slate-900 text-slate-500'
+                      }`}
+                      onClick={() => {
+                        const next = !isEnabled;
+                        setEnabledTypes(prev => ({ ...prev, [key]: next }));
+                        if (!next) setQTypes(prev => ({ ...prev, [key]: 0 }));
+                      }}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2 font-medium text-sm">
+                          {icon}
+                          <span>{label}</span>
+                        </div>
+                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                          isEnabled ? 'border-current bg-current/20' : 'border-slate-600'
+                        }`}>
+                          {isEnabled && <Check size={12} className="text-current" />}
+                        </div>
+                      </div>
+                      {isEnabled && !autoDistribute && (
+                        <div onClick={e => e.stopPropagation()} className="flex items-center gap-2 mt-2">
+                          <button
+                            onClick={() => setQTypes(prev => ({ ...prev, [key]: Math.max(0, (prev[key as keyof typeof prev] || 0) - 1) }))}
+                            className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 flex items-center justify-center font-bold text-lg"
+                          >−</button>
+                          <span className="flex-1 text-center font-mono font-bold text-lg">{count}</span>
+                          <button
+                            onClick={() => setQTypes(prev => ({ ...prev, [key]: (prev[key as keyof typeof prev] || 0) + 1 }))}
+                            className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 flex items-center justify-center font-bold text-lg"
+                          >+</button>
+                          <span className="text-xs text-slate-400">سؤال</span>
+                        </div>
+                      )}
+                      {isEnabled && autoDistribute && (
+                        <p className="text-xs mt-1 opacity-60">سيوزع الذكاء الاصطناعي تلقائياً</p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Summary row */}
               {!autoDistribute && (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2">
-                  <div>
-                    <label className="block text-xs text-slate-400 mb-1">اختيار من متعدد</label>
-                    <input type="number" min="0" value={qTypes.mcq} onChange={e=>setQTypes({...qTypes, mcq: parseInt(e.target.value)||0})} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white outline-none" />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-slate-400 mb-1">صح أو خطأ</label>
-                    <input type="number" min="0" value={qTypes.tf} onChange={e=>setQTypes({...qTypes, tf: parseInt(e.target.value)||0})} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white outline-none" />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-slate-400 mb-1">أكمل الفراغ</label>
-                    <input type="number" min="0" value={qTypes.fill} onChange={e=>setQTypes({...qTypes, fill: parseInt(e.target.value)||0})} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white outline-none" />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-slate-400 mb-1">أجب</label>
-                    <input type="number" min="0" value={qTypes.short} onChange={e=>setQTypes({...qTypes, short: parseInt(e.target.value)||0})} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white outline-none" />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-slate-400 mb-1">توصيل / جدول</label>
-                    <input type="number" min="0" value={qTypes.match} onChange={e=>setQTypes({...qTypes, match: parseInt(e.target.value)||0})} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white outline-none" />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-slate-400 mb-1">رسم / صورة</label>
-                    <input type="number" min="0" value={qTypes.diagram} onChange={e=>setQTypes({...qTypes, diagram: parseInt(e.target.value)||0})} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white outline-none" />
-                  </div>
+                <div className="flex justify-between items-center p-3 bg-slate-900 rounded-xl border border-slate-700 text-sm">
+                  <span className="text-slate-400">مجموع الأسئلة المختارة:</span>
+                  <span className={`font-bold font-mono text-lg ${
+                    Object.values(qTypes).reduce((a,b)=>a+b,0) === totalQuestions
+                      ? 'text-emerald-400'
+                      : 'text-amber-400'
+                  }`}>
+                    {Object.values(qTypes).reduce((a,b)=>a+b,0)} / {totalQuestions}
+                  </span>
                 </div>
               )}
             </div>

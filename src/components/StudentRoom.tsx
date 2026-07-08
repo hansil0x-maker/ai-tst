@@ -25,17 +25,31 @@ export default function StudentRoom({ studentData, onExit }: { studentData: any,
   const videoRef = useRef<HTMLVideoElement>(null);
   const [cameraActive, setCameraActive] = useState(false);
 
+  const [fullStudentData, setFullStudentData] = useState<any>(null);
+  const [sessionToken, setSessionToken] = useState<string | null>(null);
+
   useEffect(() => {
     const newSocket = io('/', { path: '/socket.io' });
     
     newSocket.on('connect', () => {
-      newSocket.emit('join_session', { token: studentData.token, student: { name: studentData.name } }, (res: any) => {
+      // Step 1: Validate OTP
+      newSocket.emit('validate_otp', { otp: studentData.otp }, (res: any) => {
         if (!res.success) {
-          toast.error(res.error || 'فشل الانضمام');
+          toast.error(res.error || 'الكود غير صحيح');
           onExit();
         } else {
-          toast.success('تم الانضمام لغرفة الانتظار بنجاح');
-          setStatus('waiting');
+          setFullStudentData(res.student);
+          setSessionToken(res.token);
+          // Step 2: Join Session
+          newSocket.emit('join_session', { token: res.token, student: res.student }, (joinRes: any) => {
+             if (!joinRes.success) {
+                toast.error('فشل الانضمام للغرفة');
+                onExit();
+             } else {
+                toast.success('تم قبول الكود بنجاح');
+                setStatus('waiting');
+             }
+          });
         }
       });
     });
@@ -44,8 +58,22 @@ export default function StudentRoom({ studentData, onExit }: { studentData: any,
       setExam(examPayload);
       setStatus('active');
       setTimeLeft(examPayload.duration ? examPayload.duration * 60 : 60 * 60);
-      toast.success('بدأ الامتحان!');
-      startCameraProctoring(newSocket, studentData);
+      toast.success('بدأ الامتحان! حظاً موفقاً.');
+      startCameraProctoring(newSocket, fullStudentData);
+    });
+
+    newSocket.on('teacher_message', (data) => {
+      toast(data.message, { icon: '💬', duration: 6000, style: { background: '#3b82f6', color: '#fff' } });
+    });
+
+    newSocket.on('results_published', (data) => {
+      const { resultsList } = data;
+      // Save all published results to local storage so students can check them later using their access code
+      const existing = JSON.parse(localStorage.getItem('nexus_published_results') || '{}');
+      resultsList.forEach((r: any) => {
+         existing[r.accessToken] = r.resultData;
+      });
+      localStorage.setItem('nexus_published_results', JSON.stringify(existing));
     });
 
     newSocket.on('session_closed', () => {
@@ -66,11 +94,21 @@ export default function StudentRoom({ studentData, onExit }: { studentData: any,
 
     setSocket(newSocket);
 
+    // Anti-cheat: Visibility change
+    const handleVisibilityChange = () => {
+      if (document.hidden && status === 'active') {
+         toast.error('تحذير: لا تخرج من شاشة الامتحان!');
+         newSocket.emit('cheat_alert', { token: sessionToken, student: fullStudentData, reason: 'الطالب خرج من شاشة الامتحان (تبديل تطبيقات أو متصفح)' });
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     return () => {
       stopCamera();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       newSocket.disconnect();
     };
-  }, [studentData, onExit]);
+  }, [studentData, onExit, status, sessionToken, fullStudentData]);
 
   // Timer logic
   useEffect(() => {
@@ -138,13 +176,13 @@ export default function StudentRoom({ studentData, onExit }: { studentData: any,
             const faces = await faceDetector.detect(videoRef.current);
             if (faces.length === 0) {
               if (Date.now() - lastFaceSeen > 3000) {
-                 activeSocket?.emit('cheat_alert', { token: studentData.token, student: studentData, reason: 'لم يتم اكتشاف وجه (الطالب لا ينظر للشاشة لأكثر من 3 ثوانٍ)' });
+                 activeSocket?.emit('cheat_alert', { token: sessionToken, student: fullStudentData, reason: 'لم يتم اكتشاف وجه (الطالب لا ينظر للشاشة لأكثر من 3 ثوانٍ)' });
                  lastFaceSeen = Date.now(); // reset to avoid spamming
               }
             } else {
               lastFaceSeen = Date.now();
               if (faces.length > 1) {
-                activeSocket?.emit('cheat_alert', { token: studentData.token, student: studentData, reason: 'تم اكتشاف أكثر من وجه في الكاميرا' });
+                activeSocket?.emit('cheat_alert', { token: sessionToken, student: fullStudentData, reason: 'تم اكتشاف أكثر من وجه في الكاميرا' });
               }
             }
           } catch (e) {
@@ -155,7 +193,7 @@ export default function StudentRoom({ studentData, onExit }: { studentData: any,
     } catch (err) {
       console.warn("Camera access denied or unavailable", err);
       toast.error("تم رفض الوصول للكاميرا. سيتم إرسال تنبيه للمعلم.", { duration: 5000 });
-      activeSocket?.emit('cheat_alert', { token: studentData.token, student, reason: 'رفض إعطاء صلاحية الكاميرا أو الكاميرا غير متوفرة' });
+      activeSocket?.emit('cheat_alert', { token: sessionToken, student: fullStudentData, reason: 'رفض إعطاء صلاحية الكاميرا أو الكاميرا غير متوفرة' });
     }
   };
 
@@ -173,9 +211,9 @@ export default function StudentRoom({ studentData, onExit }: { studentData: any,
 
   const performSubmission = (activeSocket: Socket) => {
     activeSocket.emit('submit_exam', {
-      token: studentData.token,
+      token: sessionToken,
       payload: {
-        student: studentData,
+        student: fullStudentData,
         answers: answers,
         examId: exam.id,
         submittedAt: Date.now()
@@ -183,10 +221,17 @@ export default function StudentRoom({ studentData, onExit }: { studentData: any,
     });
     
     // Generate dynamic info
+    const accessCode = Math.floor(1000 + Math.random() * 9000).toString();
+    
+    // Save to local mapping so we can attach it when teacher grades
+    const pendingResults = JSON.parse(localStorage.getItem('nexus_pending_results') || '{}');
+    pendingResults[fullStudentData.name] = accessCode;
+    localStorage.setItem('nexus_pending_results', JSON.stringify(pendingResults));
+
     setHandoverInfo({
-      accessToken: Math.floor(1000 + Math.random() * 9000).toString(),
+      accessToken: accessCode,
       nextStudent: "الطالب التالي",
-      nextCode: Math.floor(10000 + Math.random() * 90000).toString()
+      nextCode: Math.floor(1000 + Math.random() * 9000).toString()
     });
     
     stopCamera();
@@ -204,11 +249,11 @@ export default function StudentRoom({ studentData, onExit }: { studentData: any,
     }
 
     if (earlySubmitApproved) {
-       if (window.confirm(`أنت متأكد؟ لديك ${Math.floor(timeLeft / 60)} دقيقة متبقية و ${totalQ - answeredQ} أسئلة فارغة.`)) {
+        if (window.confirm(`أنت متأكد؟ لديك ${Math.floor(timeLeft / 60)} دقيقة متبقية و ${totalQ - answeredQ} أسئلة فارغة.`)) {
           performSubmission(socket);
-       }
+        }
     } else {
-       socket.emit('request_early_submit', { token: studentData.token, student: studentData });
+       socket.emit('request_early_submit', { token: sessionToken, student: fullStudentData });
        setEarlySubmitRequested(true);
        toast('تم إرسال طلب للمراقب. يرجى الانتظار للموافقة.', { icon: '📡' });
     }
@@ -277,11 +322,11 @@ export default function StudentRoom({ studentData, onExit }: { studentData: any,
           <div className="w-24 h-24 rounded-full bg-blue-900/30 border border-blue-500/50 mx-auto flex items-center justify-center relative overflow-hidden">
              <Loader2 size={48} className="text-blue-500 animate-spin absolute" />
           </div>
-          <h2 className="text-3xl font-bold text-white">أهلاً بك يا {studentData.name}</h2>
+          <h2 className="text-3xl font-bold text-white">أهلاً بك يا {fullStudentData?.name}</h2>
           <p className="text-slate-400 leading-relaxed">أنت الآن في غرفة الانتظار.<br/>سيظهر الامتحان فوراً عندما يبدأ المعلم الجلسة.</p>
           <div className="bg-slate-900 p-4 rounded-xl border border-slate-700">
-             <p className="text-slate-500 mb-1 text-sm">رمز الجلسة</p>
-             <p className="text-blue-400 font-mono text-3xl tracking-[0.3em] font-bold">{studentData.token}</p>
+             <p className="text-slate-500 mb-1 text-sm">كود الدخول الخاص بك</p>
+             <p className="text-blue-400 font-mono text-3xl tracking-[0.3em] font-bold">{studentData.otp}</p>
           </div>
         </div>
       </div>
@@ -298,10 +343,10 @@ export default function StudentRoom({ studentData, onExit }: { studentData: any,
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col">
       {/* Top Status Bar */}
       <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 p-4 sticky top-0 z-20 shadow-sm flex flex-col gap-3">
-        <div className="flex justify-between items-center">
+         <div className="flex justify-between items-center">
            <div>
              <h1 className="font-bold text-lg text-slate-800 dark:text-white">{exam?.title || 'الامتحان'}</h1>
-             <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">الطالب: {studentData.name}</p>
+             <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">الطالب: {fullStudentData?.name}</p>
            </div>
            
            {/* Timer */}

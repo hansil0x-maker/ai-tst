@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Home, FileText, Users, ScanLine, Settings, LogOut, Bell, Headset, X } from 'lucide-react';
+import { Home, FileText, Users, Settings, LogOut, Bell, Headset, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Dashboard from './Dashboard';
 import Exams from './Exams';
@@ -10,7 +10,7 @@ import { Wifi } from 'lucide-react';
 import { syncManager } from '../sync';
 
 export default function MainLayout({ role, onLock }: { role: 'dashboard' | 'grader' | 'school', onLock: () => void }) {
-  const [activeTab, setActiveTab] = useState(role === 'grader' ? 'scan' : 'dashboard');
+  const [activeTab, setActiveTab] = useState(role === 'grader' ? 'students' : 'dashboard');
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState<{id: number, text: string, type: 'info'|'warning'}[]>([]);
 
@@ -63,8 +63,7 @@ export default function MainLayout({ role, onLock }: { role: 'dashboard' | 'grad
       ];
     } else if (role === 'grader') {
       return [
-        
-        { id: 'students', icon: <Users size={24} />, label: 'بيانات الطلاب والطباعة' },
+        { id: 'students', icon: <Users size={24} />, label: 'بيانات الطلاب' },
       ];
     }
     // School gets everything (independent mode)

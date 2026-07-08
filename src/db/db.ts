@@ -64,6 +64,22 @@ export interface Analysis {
   text: string;
 }
 
+export interface ExamSession {
+  id?: number;
+  sessionToken: string;
+  examId: number;
+  batchNumber: number;
+  createdAt: number;
+}
+
+export interface AiReport {
+  id?: number;
+  examId: number;
+  createdAt: number;
+  type: string;
+  reportData: any; // JSON containing top5, bottom5, weak topic, text, etc.
+}
+
 const db = new Dexie('ExamAppDB') as Dexie & {
   settings: EntityTable<Setting, 'id'>;
   classes: EntityTable<ClassEntity, 'id'>;
@@ -71,6 +87,8 @@ const db = new Dexie('ExamAppDB') as Dexie & {
   exams: EntityTable<Exam, 'id'>;
   results: EntityTable<Result, 'id'>;
   analyses: EntityTable<Analysis, 'id'>;
+  examSessions: EntityTable<ExamSession, 'id'>;
+  aiReports: EntityTable<AiReport, 'id'>;
 };
 
 db.version(1).stores({
@@ -98,6 +116,11 @@ db.version(3).stores({
 
 db.version(4).stores({
   exams: '++id, title, date, classId, subject, status, academicYear' // no new indexed fields needed, but Dexie handles schema additions
+});
+
+db.version(5).stores({
+  examSessions: '++id, sessionToken, examId, batchNumber',
+  aiReports: '++id, examId, type'
 });
 
 export { db };

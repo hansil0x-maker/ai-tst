@@ -29,7 +29,7 @@ export default function SettingsTab() {
         academicYear: academicYear || settings.academicYear 
       });
       if (newPassword.length >= 4) {
-        localStorage.setItem('nexus_user_pwd', newPassword);
+        await db.settings.update(settings.id, { userPasswordHash: newPassword });
         setNewPassword('');
         toast.success('تم تحديث كلمة المرور وحفظ الإعدادات!');
       } else if (newPassword.length > 0) {

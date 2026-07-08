@@ -5,7 +5,7 @@ import { GoogleGenAI, Type } from '@google/genai';
 import dotenv from 'dotenv';
 import http from 'http';
 import { Server } from 'socket.io';
-import { gradeExamWithOMR } from './omr.ts';
+// OMR scanning removed — digital exams only
 
 dotenv.config();
 
@@ -45,13 +45,46 @@ async function startServer() {
     // Teacher creates a new exam session
     socket.on('create_session', (data, callback) => {
       const token = Math.floor(100000 + Math.random() * 900000).toString();
-      activeSessions.set(token, { teacherId: socket.id, students: [] });
+      activeSessions.set(token, { teacherId: socket.id, otps: {}, students: [] });
       socket.join(token);
       console.log(`Teacher created session ${token}`);
       if (callback) callback({ success: true, token });
     });
 
-    // Student joins a session using the one-time token
+    // Teacher registers OTPs for the session
+    socket.on('register_session_otps', (data) => {
+      const { token, otpsMap } = data; // otpsMap: { [otp]: { studentId, studentName, ... } }
+      const session = activeSessions.get(token);
+      if (session && session.teacherId === socket.id) {
+        session.otps = otpsMap;
+        console.log(`Teacher registered ${Object.keys(otpsMap).length} OTPs for session ${token}`);
+      }
+    });
+
+    // Student validates OTP (No session token needed, just the OTP)
+    socket.on('validate_otp', (data, callback) => {
+      const { otp } = data;
+      let foundSessionToken = null;
+      let foundStudent = null;
+
+      for (const [token, session] of activeSessions.entries()) {
+        if (session.otps && session.otps[otp] && !session.otps[otp].used) {
+          foundSessionToken = token;
+          foundStudent = session.otps[otp];
+          // Burn the OTP
+          session.otps[otp].used = true;
+          break;
+        }
+      }
+
+      if (foundSessionToken && foundStudent) {
+        if (callback) callback({ success: true, token: foundSessionToken, student: foundStudent });
+      } else {
+        if (callback) callback({ success: false, error: 'كود الدخول غير صحيح أو تم استخدامه' });
+      }
+    });
+
+    // Student joins a session (called after validate_otp)
     socket.on('join_session', (data, callback) => {
       const { token, student } = data;
       const session = activeSessions.get(token);
@@ -100,6 +133,21 @@ async function startServer() {
       if (session) {
         socket.to(session.teacherId).emit('student_cheat_alert', { student, reason });
       }
+    });
+
+    socket.on('teacher_message', (data) => {
+      const { token, message, targetSocketId } = data;
+      if (targetSocketId) {
+        io.to(targetSocketId).emit('teacher_message', { message });
+      } else {
+        socket.to(token).emit('teacher_message', { message });
+      }
+    });
+
+    socket.on('deliver_results', (data) => {
+      const { token, resultsList } = data;
+      // resultsList should be an array of { accessToken, resultData }
+      socket.to(token).emit('results_published', { resultsList });
     });
 socket.on('submit_exam', (data) => {
       const { token, payload } = data;
@@ -157,39 +205,42 @@ socket.on('submit_exam', (data) => {
     });
   });
 
-  app.post('/api/grade-exam', async (req, res) => {
-    try {
-      const { image, numQuestions } = req.body;
-      const json = await gradeExamWithOMR(image, numQuestions);
-      res.json(json);
-    } catch (error: any) {
-      console.error("AI Grading Error:", error);
-      res.status(500).json({ error: "فشل في تصحيح الورقة عبر OpenCV: " + (error.message || JSON.stringify(error)) });
-    }
+  // OMR paper scanning disabled — digital exams only
+  app.post('/api/grade-exam', (_req, res) => {
+    res.status(410).json({ error: 'تم إيقاف المسح الضوئي. النظام يعمل بالامتحانات الرقمية فقط.' });
   });
 
     app.post('/api/generate-exam', async (req, res) => {
     try {
-      const { prompt, content, files, totalQuestions, autoDistribute, qTypes, previousQuestions } = req.body;
+      const { prompt, content, files, totalQuestions, autoDistribute, qTypes, enabledTypes, previousQuestions } = req.body;
       const apiKey = process.env.GEMINI_API_KEY;
       
       if (!apiKey) {
         return res.status(500).json({ error: 'GEMINI_API_KEY is missing' });
       }
 
+      const typeLabels: Record<string, string> = {
+        mcq: 'Multiple Choice (type: mcq)',
+        tf: 'True/False (type: true_false)',
+        fill: 'Fill in the Blanks (type: fill_blanks)',
+        short: 'Short Answer / Essay (type: short_answer)',
+        match: 'Matching / Table - correct word (type: matching)',
+        diagram: 'Label Diagram or Image Parts (type: image_labeling)',
+      };
+
       let configPrompt = `Target Total Questions: ${totalQuestions || 10}\n`;
       if (!autoDistribute && qTypes) {
-         configPrompt += `
-Please STRICTLY adhere to generating the following amounts of question types. The total must sum to ${totalQuestions}. Do not generate any other types:
-- ${qTypes.mcq} Multiple Choice questions (type: mcq)
-- ${qTypes.tf} True/False questions (type: true_false)
-- ${qTypes.fill} Fill in the Blanks questions (type: fill_blanks)
-- ${qTypes.short} Short Answer questions (type: short_answer)
-- ${qTypes.match} Matching questions (type: matching)
-- ${qTypes.diagram} Label Diagram questions (type: image_labeling)\n`;
+        const lines = Object.entries(qTypes)
+          .filter(([, count]) => (count as number) > 0)
+          .map(([k, count]) => `- ${count} ${typeLabels[k] || k}`)
+          .join('\n');
+        configPrompt += `\nPlease STRICTLY adhere to generating the following amounts of question types. Do not generate any other types:\n${lines}\n`;
       } else {
-         configPrompt += `
-Please automatically distribute the ${totalQuestions || 10} questions among the 6 supported types based on what fits the content best: mcq, true_false, fill_blanks, short_answer, matching, image_labeling.\n`;
+        // autoDistribute: only among enabled types
+        const enabledKeys = enabledTypes
+          ? Object.entries(enabledTypes).filter(([, v]) => v).map(([k]) => typeLabels[k] || k)
+          : Object.values(typeLabels);
+        configPrompt += `\nPlease automatically distribute the ${totalQuestions || 10} questions ONLY among these enabled types (do NOT use any other types):\n${enabledKeys.map(t => `- ${t}`).join('\n')}\n`;
       }
 
       let avoidPrompt = '';
@@ -345,8 +396,8 @@ Respond ONLY in valid JSON format:
       "studentName": "string",
       "score": number,
       "percentage": number,
-      "category": "Pass" | "Fail" | "Perfect",
-      "aiFeedback": "Brief comment on the student's performance"
+      "category": "ناجح" | "راسب" | "مكمل",
+      "aiFeedback": "Brief Arabic comment on the student's performance"
     }
   ]
 }
@@ -365,6 +416,53 @@ Respond ONLY in valid JSON format:
   } catch (error: any) {
     console.error("AI Digital Grading Error:", error);
     res.status(500).json({ error: "فشل في التصحيح الذكي" });
+  }
+});
+
+app.post('/api/generate-exam-report', async (req, res) => {
+  try {
+    const { exam, results } = req.body;
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ error: 'GEMINI_API_KEY is missing' });
+    }
+    
+    const ai = new GoogleGenAI({ apiKey });
+    
+    const prompt = `
+You are an expert educational analyst.
+Analyze the following exam and the students' results.
+Exam Title: ${exam.title}
+Results: ${JSON.stringify(results)}
+
+Identify:
+1. The top 5 performing students.
+2. The 5 students who need the most support (weakest).
+3. The specific topic or question type that the majority struggled with.
+4. A brief overall report and recommendations for the teacher in Arabic.
+
+Respond ONLY in valid JSON format:
+{
+  "top5": ["student name 1", "student name 2", ...],
+  "bottom5": ["student name 1", "student name 2", ...],
+  "weakestTopic": "description of the weak topic",
+  "reportText": "Overall Arabic report and recommendations"
+}
+`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: [{ text: prompt }],
+      config: {
+        responseMimeType: "application/json",
+      }
+    });
+
+    const aiRes = JSON.parse(response.text || '{}');
+    res.json(aiRes);
+  } catch (error: any) {
+    console.error("AI Exam Report Error:", error);
+    res.status(500).json({ error: "فشل في إنشاء التقرير الذكي" });
   }
 });
 
