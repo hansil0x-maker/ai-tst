@@ -66,7 +66,7 @@ export default function LockScreen({
         setError("كلمة المرور يجب أن تكون 4 رموز على الأقل");
         return;
       }
-      // Extremely simple hash/save for offline app
+      // Extremely simple hash/save for offline app 1
       await db.settings.update(1, { userPasswordHash: passwordInput });
       setPasswordInput("");
       setError("");
