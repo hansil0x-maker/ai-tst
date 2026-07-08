@@ -223,7 +223,7 @@ export default function LiveExamDashboard() {
                </h3>
                
                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                 {Object.entries(sessionOtps).map(([otp, st]) => {
+                 {Object.entries(sessionOtps).map(([otp, st]: [string, any]) => {
                    const isConnected = students.some(s => s.id === st.id || s.name === st.name);
                    const isSubmitted = submissions.some(s => s.student.name === st.name);
                    

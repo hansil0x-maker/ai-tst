@@ -373,11 +373,11 @@ export default function CreateExamFlow({ onCancel, onComplete }: { onCancel: () 
                 <div className="flex justify-between items-center p-3 bg-slate-900 rounded-xl border border-slate-700 text-sm">
                   <span className="text-slate-400">مجموع الأسئلة المختارة:</span>
                   <span className={`font-bold font-mono text-lg ${
-                    Object.values(qTypes).reduce((a,b)=>a+b,0) === totalQuestions
+                    Object.values(qTypes).reduce((a: any, b: any) => a + b, 0) === totalQuestions
                       ? 'text-emerald-400'
                       : 'text-amber-400'
                   }`}>
-                    {Object.values(qTypes).reduce((a,b)=>a+b,0)} / {totalQuestions}
+                    {Object.values(qTypes).reduce((a: any, b: any) => a + b, 0)} / {totalQuestions}
                   </span>
                 </div>
               )}
