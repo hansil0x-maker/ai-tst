@@ -335,7 +335,7 @@ export default function LiveExamDashboard() {
                         const res = await fetch('/api/grade-digital-submissions', {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ exam, submissions, apiKey: settings?.geminiApiKey })
+                          body: JSON.stringify({ exam, submissions })
                         });
                         const data = await res.json();
                         if (!res.ok) throw new Error(data.error);
@@ -412,7 +412,7 @@ export default function LiveExamDashboard() {
                               const res = await fetch('/api/generate-exam-report', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ exam, results: gradedResults, apiKey: settings?.geminiApiKey })
+                                body: JSON.stringify({ exam, results: gradedResults })
                               });
                               const data = await res.json();
                               if (!res.ok) throw new Error(data.error);

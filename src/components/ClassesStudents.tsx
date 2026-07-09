@@ -95,7 +95,7 @@ export default function ClassesStudents() {
       const response = await fetch('/api/generate-recommendation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, apiKey: settings?.geminiApiKey })
+        body: JSON.stringify({ prompt })
       });
       if (!response.ok) throw new Error('Failed to generate recommendation');
       const data = await response.json();
@@ -138,7 +138,7 @@ export default function ClassesStudents() {
       const response = await fetch('/api/generate-recommendation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, apiKey: settings?.geminiApiKey })
+        body: JSON.stringify({ prompt })
       });
       if (!response.ok) throw new Error('Failed to generate recommendation');
       const data = await response.json();

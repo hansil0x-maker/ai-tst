@@ -137,7 +137,7 @@ export default function CreateExamFlow({ onCancel, onComplete }: { onCancel: () 
       const res = await fetch('/api/generate-exam', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: notes, content: contentBlock, files, totalQuestions, autoDistribute, qTypes: effectiveQTypes, enabledTypes, previousQuestions, apiKey: settings?.geminiApiKey })
+        body: JSON.stringify({ prompt: notes, content: contentBlock, files, totalQuestions, autoDistribute, qTypes: effectiveQTypes, enabledTypes, previousQuestions })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'فشل التوليد');
