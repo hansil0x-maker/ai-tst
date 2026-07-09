@@ -293,7 +293,7 @@ Make sure it is perfect JSON.`;
       }
 
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-2.0-flash',
         contents: parts,
         config: {
           responseMimeType: "application/json",
@@ -404,7 +404,7 @@ Respond ONLY in valid JSON format:
 `;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-2.0-flash',
       contents: [{ text: prompt }],
       config: {
         responseMimeType: "application/json",
@@ -451,7 +451,7 @@ Respond ONLY in valid JSON format:
 `;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-2.0-flash',
       contents: [{ text: prompt }],
       config: {
         responseMimeType: "application/json",
@@ -476,7 +476,7 @@ app.post('/api/generate-recommendation', async (req, res) => {
 
       const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-2.0-flash',
         contents: prompt,
         config: {
           systemInstruction: 'You are a helpful AI assistant analyzing student performance.',
