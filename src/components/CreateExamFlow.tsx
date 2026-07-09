@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 
 export default function CreateExamFlow({ onCancel, onComplete }: { onCancel: () => void, onComplete: () => void }) {
   const classes = useLiveQuery(() => db.classes.toArray()) || [];
+  const settings = useLiveQuery(() => db.settings.get(1));
   
   const pastExams = useLiveQuery(() => db.exams.toArray()) || [];
   const uniqueTitles = Array.from(new Set(pastExams.map(e => e.title))).filter(Boolean);
@@ -136,7 +137,7 @@ export default function CreateExamFlow({ onCancel, onComplete }: { onCancel: () 
       const res = await fetch('/api/generate-exam', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: notes, content: contentBlock, files, totalQuestions, autoDistribute, qTypes: effectiveQTypes, enabledTypes, previousQuestions })
+        body: JSON.stringify({ prompt: notes, content: contentBlock, files, totalQuestions, autoDistribute, qTypes: effectiveQTypes, enabledTypes, previousQuestions, apiKey: settings?.geminiApiKey })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'فشل التوليد');

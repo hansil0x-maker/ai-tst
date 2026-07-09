@@ -5,6 +5,7 @@ export interface Setting {
   schoolName: string;
   teacherName: string;
   academicYear: string;
+  geminiApiKey?: string;
   devPasswordEntered: boolean;
   userPasswordHash: string | null;
 }

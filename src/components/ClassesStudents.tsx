@@ -8,6 +8,7 @@ import html2canvas from 'html2canvas';
 
 export default function ClassesStudents() {
   const classes = useLiveQuery(() => db.classes.toArray()) || [];
+  const settings = useLiveQuery(() => db.settings.get(1));
   const students = useLiveQuery(() => db.students.toArray()) || [];
   const results = useLiveQuery(() => db.results.toArray()) || [];
   const exams = useLiveQuery(() => db.exams.toArray()) || [];
@@ -94,7 +95,7 @@ export default function ClassesStudents() {
       const response = await fetch('/api/generate-recommendation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt })
+        body: JSON.stringify({ prompt, apiKey: settings?.geminiApiKey })
       });
       if (!response.ok) throw new Error('Failed to generate recommendation');
       const data = await response.json();
@@ -137,7 +138,7 @@ export default function ClassesStudents() {
       const response = await fetch('/api/generate-recommendation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt })
+        body: JSON.stringify({ prompt, apiKey: settings?.geminiApiKey })
       });
       if (!response.ok) throw new Error('Failed to generate recommendation');
       const data = await response.json();

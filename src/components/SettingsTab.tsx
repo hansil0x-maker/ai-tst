@@ -10,6 +10,7 @@ export default function SettingsTab() {
   const [schoolName, setSchoolName] = useState('');
   const [teacherName, setTeacherName] = useState('');
   const [academicYear, setAcademicYear] = useState('');
+  const [geminiApiKey, setGeminiApiKey] = useState('');
   const [newPassword, setNewPassword] = useState('');
 
   // Update local state when settings load
@@ -18,6 +19,7 @@ export default function SettingsTab() {
       setSchoolName(settings.schoolName || '');
       setTeacherName(settings.teacherName || '');
       setAcademicYear(settings.academicYear || '');
+      setGeminiApiKey(settings.geminiApiKey || '');
     }
   }, [settings]);
 
@@ -26,7 +28,8 @@ export default function SettingsTab() {
       await db.settings.update(settings.id, { 
         schoolName: schoolName || settings.schoolName, 
         teacherName: teacherName || settings.teacherName,
-        academicYear: academicYear || settings.academicYear 
+        academicYear: academicYear || settings.academicYear,
+        geminiApiKey: geminiApiKey || settings.geminiApiKey 
       });
       if (newPassword.length >= 4) {
         await db.settings.update(settings.id, { userPasswordHash: newPassword });
@@ -88,6 +91,10 @@ export default function SettingsTab() {
           <div>
              <label className="block text-sm text-slate-400 mb-1">العام الدراسي</label>
              <input type="text" value={academicYear} onChange={e=>setAcademicYear(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none" />
+          </div>
+          <div>
+             <label className="block text-sm text-slate-400 mb-1">مفتاح الذكاء الاصطناعي (Gemini API Key)</label>
+             <input type="password" value={geminiApiKey} onChange={e=>setGeminiApiKey(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none" placeholder="AIzaSy..." />
           </div>
           <div className="pt-4 border-t border-slate-700">
              <label className="block text-sm text-slate-400 mb-1">تغيير كلمة المرور</label>

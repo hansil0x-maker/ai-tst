@@ -171,7 +171,7 @@ export default function Dashboard() {
       const response = await fetch('/api/generate-recommendation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt })
+        body: JSON.stringify({ prompt, apiKey: settings?.geminiApiKey })
       });
       if (!response.ok) throw new Error('Failed');
       const data = await response.json();
