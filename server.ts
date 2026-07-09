@@ -213,7 +213,7 @@ socket.on('submit_exam', (data) => {
     app.post('/api/generate-exam', async (req, res) => {
     try {
       const { prompt, content, files, totalQuestions, autoDistribute, qTypes, enabledTypes, previousQuestions } = req.body;
-      const apiKey = process.env.GEMINI_API_KEY || "AIzaSyCeCKHPsR4A1mhYS4GG1kxx614Umm2FIbo";
+      const apiKey = process.env.GEMINI_API_KEY;
       
       if (!apiKey) {
         return res.status(500).json({ error: 'GEMINI_API_KEY is missing' });
@@ -370,7 +370,7 @@ Make sure it is perfect JSON.`;
 app.post('/api/grade-digital-submissions', async (req, res) => {
   try {
     const { exam, submissions } = req.body;
-    const apiKey = process.env.GEMINI_API_KEY || "AIzaSyCeCKHPsR4A1mhYS4GG1kxx614Umm2FIbo";
+    const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       return res.status(500).json({ error: 'GEMINI_API_KEY is missing' });
     }
@@ -422,7 +422,7 @@ Respond ONLY in valid JSON format:
 app.post('/api/generate-exam-report', async (req, res) => {
   try {
     const { exam, results } = req.body;
-    const apiKey = process.env.GEMINI_API_KEY || "AIzaSyCeCKHPsR4A1mhYS4GG1kxx614Umm2FIbo";
+    const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       return res.status(500).json({ error: 'GEMINI_API_KEY is missing' });
     }
@@ -469,7 +469,7 @@ Respond ONLY in valid JSON format:
 app.post('/api/generate-recommendation', async (req, res) => {
     try {
       const { prompt } = req.body;
-      const apiKey = process.env.GEMINI_API_KEY || "AIzaSyCeCKHPsR4A1mhYS4GG1kxx614Umm2FIbo";
+      const apiKey = process.env.GEMINI_API_KEY;
       if (!apiKey) {
         return res.status(500).json({ error: 'GEMINI_API_KEY is missing' });
       }
