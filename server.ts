@@ -1,13 +1,12 @@
+import dotenv from 'dotenv';
+dotenv.config();
 import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI, Type } from '@google/genai';
-import dotenv from 'dotenv';
 import http from 'http';
 import { Server } from 'socket.io';
 // OMR scanning removed — digital exams only
-
-dotenv.config();
 
 async function startServer() {
   const app = express();
@@ -342,7 +341,7 @@ Make sure it is perfect JSON.`;
 
       if (!response.text) throw new Error("No text returned from Gemini");
       
-      let rawText = response.text.trim();
+      const rawText = (typeof response.text === 'function' ? response.text() : response.text)?.trim() || '';
       let json;
       try {
         json = JSON.parse(rawText);
@@ -411,7 +410,8 @@ Respond ONLY in valid JSON format:
       }
     });
 
-    const aiRes = JSON.parse(response.text || '{}');
+    const rawText = (typeof response.text === 'function' ? response.text() : response.text)?.trim();
+    const aiRes = JSON.parse(rawText || '{}');
     res.json(aiRes);
   } catch (error: any) {
     console.error("AI Digital Grading Error:", error);
@@ -458,7 +458,8 @@ Respond ONLY in valid JSON format:
       }
     });
 
-    const aiRes = JSON.parse(response.text || '{}');
+    const rawText = (typeof response.text === 'function' ? response.text() : response.text)?.trim();
+    const aiRes = JSON.parse(rawText || '{}');
     res.json(aiRes);
   } catch (error: any) {
     console.error("AI Exam Report Error:", error);
@@ -477,13 +478,14 @@ app.post('/api/generate-recommendation', async (req, res) => {
       const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
         model: 'gemini-2.0-flash',
-        contents: prompt,
+        contents: [{ text: prompt }],
         config: {
           systemInstruction: 'You are a helpful AI assistant analyzing student performance.',
         }
       });
       
-      res.json({ text: response.text });
+      const rawText = (typeof response.text === 'function' ? response.text() : response.text)?.trim();
+      res.json({ text: rawText });
     } catch (error: any) {
        console.error("AI Recommendation Error:", error);
        res.status(500).json({ error: error.message || 'Error generating recommendation' });
