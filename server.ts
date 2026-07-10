@@ -3,7 +3,7 @@ dotenv.config();
 import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
-import { GoogleGenAI, Type } from '@google/genai';
+import OpenAI from 'openai';
 import http from 'http';
 import { Server } from 'socket.io';
 // OMR scanning removed — digital exams only
@@ -212,10 +212,10 @@ socket.on('submit_exam', (data) => {
     app.post('/api/generate-exam', async (req, res) => {
     try {
       const { prompt, content, files, totalQuestions, autoDistribute, qTypes, enabledTypes, previousQuestions } = req.body;
-      const apiKey = process.env.GEMINI_API_KEY;
+      const apiKey = process.env.GROQ_API_KEY;
       
       if (!apiKey) {
-        return res.status(500).json({ error: 'GEMINI_API_KEY is missing' });
+        return res.status(500).json({ error: 'GROQ_API_KEY is missing' });
       }
 
       const typeLabels: Record<string, string> = {
@@ -250,7 +250,7 @@ DO NOT generate any questions that are similar to the following questions previo
 ` + JSON.stringify(previousQuestions, null, 2);
       }
 
-      const ai = new GoogleGenAI({ apiKey });
+      const ai = new OpenAI({ baseURL: 'https://api.groq.com/openai/v1', apiKey });
       
       const fullPrompt = `You are an expert teacher. Generate a comprehensive exam based on the provided content or files. 
 This exam will be delivered digitally via a local Wi-Fi PWA.
@@ -279,69 +279,26 @@ Please return ONLY a valid JSON object matching this structure:
 }
 Make sure it is perfect JSON.`;
 
-      const parts: any[] = [{ text: fullPrompt }];
+      const messages: any[] = [{ role: 'user', content: fullPrompt }];
       if (files && files.length > 0) {
-        files.forEach((f) => {
-           parts.push({
-             inlineData: {
-               data: f.data,
-               mimeType: f.mimeType
-             }
+        const userContent: any[] = [{ type: 'text', text: fullPrompt }];
+        files.forEach((f: any) => {
+           userContent.push({
+             type: 'image_url',
+             image_url: { url: `data:${f.mimeType};base64,${f.data}` }
            });
         });
+        messages[0].content = userContent;
       }
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.0-flash',
-        contents: parts,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              aiComment: { type: Type.STRING },
-              questions: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    id: { type: Type.INTEGER },
-                    type: { type: Type.STRING },
-                    text: { type: Type.STRING },
-                    options: {
-                      type: Type.OBJECT,
-                      properties: {
-                        A: { type: Type.STRING },
-                        B: { type: Type.STRING },
-                        C: { type: Type.STRING },
-                        D: { type: Type.STRING }
-                      }
-                    },
-                    correctAnswer: { type: Type.STRING },
-                    matchingPairs: {
-                      type: Type.ARRAY,
-                      items: {
-                        type: Type.OBJECT,
-                        properties: {
-                          left: { type: Type.STRING },
-                          right: { type: Type.STRING }
-                        }
-                      }
-                    },
-                    imageDescription: { type: Type.STRING }
-                  },
-                  required: ["id", "type", "text", "correctAnswer"]
-                }
-              }
-            },
-            required: ["questions", "aiComment"]
-          }
-        }
+      const response = await ai.chat.completions.create({
+        model: 'llama-3.3-70b-versatile',
+        messages: messages,
+        response_format: { type: 'json_object' }
       });
 
-      if (!response.text) throw new Error("No text returned from Gemini");
-      
-      const rawText = (typeof response.text === 'function' ? response.text() : response.text)?.trim() || '';
+      const rawText = response.choices[0]?.message?.content?.trim() || '';
+      if (!rawText) throw new Error("No text returned from AI");
       let json;
       try {
         json = JSON.parse(rawText);
@@ -369,12 +326,12 @@ Make sure it is perfect JSON.`;
 app.post('/api/grade-digital-submissions', async (req, res) => {
   try {
     const { exam, submissions } = req.body;
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = process.env.GROQ_API_KEY;
     if (!apiKey) {
-      return res.status(500).json({ error: 'GEMINI_API_KEY is missing' });
+      return res.status(500).json({ error: 'GROQ_API_KEY is missing' });
     }
     
-    const ai = new GoogleGenAI({ apiKey });
+    const ai = new OpenAI({ baseURL: 'https://api.groq.com/openai/v1', apiKey });
     
     const prompt = `
 You are an expert teacher grading a digital exam. 
@@ -402,15 +359,13 @@ Respond ONLY in valid JSON format:
 }
 `;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash',
-      contents: [{ text: prompt }],
-      config: {
-        responseMimeType: "application/json",
-      }
+    const response = await ai.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      messages: [{ role: 'user', content: prompt }],
+      response_format: { type: 'json_object' }
     });
 
-    const rawText = (typeof response.text === 'function' ? response.text() : response.text)?.trim();
+    const rawText = response.choices[0]?.message?.content?.trim();
     const aiRes = JSON.parse(rawText || '{}');
     res.json(aiRes);
   } catch (error: any) {
@@ -422,12 +377,12 @@ Respond ONLY in valid JSON format:
 app.post('/api/generate-exam-report', async (req, res) => {
   try {
     const { exam, results } = req.body;
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = process.env.GROQ_API_KEY;
     if (!apiKey) {
-      return res.status(500).json({ error: 'GEMINI_API_KEY is missing' });
+      return res.status(500).json({ error: 'GROQ_API_KEY is missing' });
     }
     
-    const ai = new GoogleGenAI({ apiKey });
+    const ai = new OpenAI({ baseURL: 'https://api.groq.com/openai/v1', apiKey });
     
     const prompt = `
 You are an expert educational analyst.
@@ -450,15 +405,13 @@ Respond ONLY in valid JSON format:
 }
 `;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash',
-      contents: [{ text: prompt }],
-      config: {
-        responseMimeType: "application/json",
-      }
+    const response = await ai.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      messages: [{ role: 'user', content: prompt }],
+      response_format: { type: 'json_object' }
     });
 
-    const rawText = (typeof response.text === 'function' ? response.text() : response.text)?.trim();
+    const rawText = response.choices[0]?.message?.content?.trim();
     const aiRes = JSON.parse(rawText || '{}');
     res.json(aiRes);
   } catch (error: any) {
@@ -470,21 +423,21 @@ Respond ONLY in valid JSON format:
 app.post('/api/generate-recommendation', async (req, res) => {
     try {
       const { prompt } = req.body;
-      const apiKey = process.env.GEMINI_API_KEY;
+      const apiKey = process.env.GROQ_API_KEY;
       if (!apiKey) {
-        return res.status(500).json({ error: 'GEMINI_API_KEY is missing' });
+        return res.status(500).json({ error: 'GROQ_API_KEY is missing' });
       }
 
-      const ai = new GoogleGenAI({ apiKey });
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.0-flash',
-        contents: [{ text: prompt }],
-        config: {
-          systemInstruction: 'You are a helpful AI assistant analyzing student performance.',
-        }
+      const ai = new OpenAI({ baseURL: 'https://api.groq.com/openai/v1', apiKey });
+      const response = await ai.chat.completions.create({
+        model: 'llama-3.3-70b-versatile',
+        messages: [
+          { role: 'system', content: 'You are a helpful AI assistant analyzing student performance.' },
+          { role: 'user', content: prompt }
+        ]
       });
       
-      const rawText = (typeof response.text === 'function' ? response.text() : response.text)?.trim();
+      const rawText = response.choices[0]?.message?.content?.trim();
       res.json({ text: rawText });
     } catch (error: any) {
        console.error("AI Recommendation Error:", error);
