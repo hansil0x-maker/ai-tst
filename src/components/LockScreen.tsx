@@ -24,7 +24,17 @@ export default function LockScreen({
   const [passwordInput, setPasswordInput] = useState("");
   
   const [studentMode, setStudentMode] = useState<"login" | "register">("login");
-  const [selectedClassId, setSelectedClassId] = useState<number>(0);
+  const [availableSessions, setAvailableSessions] = useState<any[]>([]);
+  const [selectedSessionToken, setSelectedSessionToken] = useState<string>("");
+
+  useEffect(() => {
+    if (activeTab === "student" && studentMode === "register") {
+      fetch('/api/sessions')
+        .then(res => res.json())
+        .then(data => setAvailableSessions(data))
+        .catch(err => console.error(err));
+    }
+  }, [activeTab, studentMode]);
 
   const handleStudentJoin = () => {
     if (studentToken.length >= 4) {
@@ -83,8 +93,8 @@ export default function LockScreen({
   };
 
   const handleStudentRegister = () => {
-    if (studentName.trim() === "" || selectedClassId === 0) {
-      setError("الرجاء إدخال الاسم واختيار الصف");
+    if (studentName.trim() === "" || selectedSessionToken === "") {
+      setError("الرجاء إدخال الاسم واختيار الجلسة");
       return;
     }
     
@@ -92,7 +102,7 @@ export default function LockScreen({
     const tempSocket = io('/', { path: '/socket.io' });
     
     tempSocket.on('connect', () => {
-       tempSocket.emit('student_register_request', { name: studentName, classId: selectedClassId });
+       tempSocket.emit('student_register_request', { name: studentName, sessionToken: selectedSessionToken });
     });
 
     tempSocket.on('student_register_approved', (data) => {
@@ -240,13 +250,13 @@ export default function LockScreen({
                 />
 
                 <select
-                  value={selectedClassId}
-                  onChange={(e) => setSelectedClassId(parseInt(e.target.value))}
+                  value={selectedSessionToken}
+                  onChange={(e) => setSelectedSessionToken(e.target.value)}
                   className="w-full bg-slate-900 border border-slate-700 rounded-xl p-4 text-right text-lg text-slate-300 focus:ring-2 focus:ring-purple-500 outline-none mb-3 appearance-none"
                 >
-                  <option value={0}>-- اختر الصف --</option>
-                  {classes?.map(c => (
-                     <option key={c.id} value={c.id!}>{c.name} - {c.subject}</option>
+                  <option value="">-- اختر الجلسة المتاحة --</option>
+                  {availableSessions.map(s => (
+                     <option key={s.token} value={s.token}>{s.className} - {s.examTitle}</option>
                   ))}
                 </select>
 

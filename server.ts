@@ -16,6 +16,15 @@ async function startServer() {
 
   app.use(express.json({ limit: '50mb' }));
 
+  app.get('/api/sessions', (req, res) => {
+    const sessions = Array.from(activeSessions.entries()).map(([token, session]: any) => ({
+      token,
+      examTitle: session.examTitle || 'امتحان مباشر',
+      className: session.className || 'جلسة غير معروفة'
+    }));
+    res.json(sessions);
+  });
+
   // ---- Login API (Cloud Verification) ----
   app.post('/api/login', (req, res) => {
     const { role, password } = req.body;
@@ -43,11 +52,27 @@ async function startServer() {
 
     // Teacher creates a new exam session
     socket.on('create_session', (data, callback) => {
+      const { examTitle, className } = data || {};
       const token = Math.floor(100000 + Math.random() * 900000).toString();
-      activeSessions.set(token, { teacherId: socket.id, otps: {}, students: [] });
+      activeSessions.set(token, { teacherId: socket.id, otps: {}, students: [], examTitle, className });
       socket.join(token);
-      console.log(`Teacher created session ${token}`);
+      console.log(`Teacher created session ${token} for ${className} - ${examTitle}`);
       if (callback) callback({ success: true, token });
+    });
+
+    // Student asks to register for a session
+    socket.on('student_register_request', (data) => {
+      const { name, sessionToken } = data;
+      const session = activeSessions.get(sessionToken);
+      if (session) {
+        socket.to(session.teacherId).emit('student_register_request', { name, socketId: socket.id, sessionToken });
+      }
+    });
+    
+    // Teacher approves student register
+    socket.on('approve_student_register', (data) => {
+      const { studentSocketId, otp, name } = data;
+      io.to(studentSocketId).emit('student_register_approved', { otp, name });
     });
 
     // Teacher registers OTPs for the session
@@ -262,14 +287,16 @@ ${content || 'None'}
 
 Notes from teacher: ${prompt || 'None'}
 
-Please return ONLY a valid JSON object matching this structure:
+CRITICAL INSTRUCTIONS FOR LLAMA 3.3:
+1. You MUST generate the exact types of questions requested above. Do NOT just generate "mcq". If asked to distribute among types like true_false, fill_blanks, short_answer, you MUST include them.
+2. Please return ONLY a valid JSON object matching this structure:
 { 
   "questions": [
     {
       "id": 1,
       "type": "mcq | true_false | fill_blanks | short_answer | matching | image_labeling",
       "text": "The question text",
-      "options": { "A": "...", "B": "..." }, // only for mcq
+      "options": { "A": "...", "B": "...", "C": "...", "D": "..." }, // only for mcq
       "correctAnswer": "The exact correct answer or key",
       "matchingPairs": [ { "left": "...", "right": "..." } ], // only for matching
       "imageDescription": "Description of image to label if applicable" // only for image_labeling

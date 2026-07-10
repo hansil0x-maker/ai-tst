@@ -12,6 +12,7 @@ export default function LiveExamDashboard() {
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [alerts, setAlerts] = useState<any[]>([]);
   const [earlyRequests, setEarlyRequests] = useState<any[]>([]);
+  const [pendingRegistrations, setPendingRegistrations] = useState<any[]>([]);
   
   const [totalStudents, setTotalStudents] = useState<number>(30);
   const [availableDevices, setAvailableDevices] = useState<number>(4);
@@ -51,6 +52,11 @@ export default function LiveExamDashboard() {
       toast.error(`تنبيه غش: ${data.student.name} - ${data.reason}`);
     });
 
+    newSocket.on('student_register_request', (data) => {
+      setPendingRegistrations(prev => [...prev, data]);
+      toast(`طلب تسجيل جديد من: ${data.name}`, { icon: '👤' });
+    });
+
     newSocket.on('student_early_submit_request', (data) => {
       setEarlyRequests(prev => [...prev, data]);
       toast('طلب تسليم مبكر من: ' + data.student.name, { icon: '⏳' });
@@ -70,6 +76,36 @@ export default function LiveExamDashboard() {
   }, []);
 
   
+  const handleApproveRegistration = async (req: any) => {
+    if (socket && sessionToken) {
+      // Create new student in DB
+      try {
+        const studentId = await db.students.add({
+           name: req.name,
+           classId: selectedClassId,
+           createdAt: new Date().toISOString()
+        });
+        
+        let otp;
+        do {
+          otp = Math.floor(1000 + Math.random() * 9000).toString();
+        } while (sessionOtps[otp]);
+        
+        const newOtps = { ...sessionOtps, [otp]: { id: studentId, name: req.name, classId: selectedClassId, used: false } };
+        setSessionOtps(newOtps);
+        
+        // Notify server
+        socket.emit('register_session_otps', { token: sessionToken, otpsMap: newOtps });
+        socket.emit('approve_student_register', { studentSocketId: req.socketId, otp, name: req.name });
+        
+        setPendingRegistrations(prev => prev.filter(r => r.socketId !== req.socketId));
+        toast.success(`تم قبول ${req.name} وإرسال الكود`);
+      } catch (err) {
+         toast.error('حدث خطأ أثناء حفظ الطالب');
+      }
+    }
+  };
+
   const handleApproveEarly = (req: any) => {
     if (socket) {
       socket.emit('approve_early_submit', { studentSocketId: req.socketId });
@@ -106,7 +142,10 @@ export default function LiveExamDashboard() {
     
     setSessionOtps(otpsMap);
 
-    socket.emit('create_session', {}, async (res: any) => {
+    const exam = exams?.find(e => e.id === selectedExamId);
+    const cls = classes?.find(c => c.id === selectedClassId);
+
+    socket.emit('create_session', { examTitle: exam?.title, className: cls?.name }, async (res: any) => {
       if (res.success) {
         setSessionToken(res.token);
         setStudents([]);
@@ -290,6 +329,19 @@ export default function LiveExamDashboard() {
                <button onClick={handleSendQuickMessage} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold transition-colors">إرسال</button>
             </div>
             
+            {pendingRegistrations.length > 0 && (
+              <div className="pt-4 border-t border-purple-700/50">
+                <h3 className="font-bold text-purple-500 mb-2">طلبات الانضمام (تسجيل جديد)</h3>
+                <div className="space-y-2">
+                  {pendingRegistrations.map((req, i) => (
+                    <div key={i} className="flex justify-between items-center p-3 bg-purple-900/20 rounded-lg border border-purple-800">
+                      <span className="text-purple-200">{req.name}</span>
+                      <button onClick={() => handleApproveRegistration(req)} className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded">قبول وإرسال الكود</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             
             {earlyRequests.length > 0 && (
               <div className="pt-4 border-t border-amber-700/50">
