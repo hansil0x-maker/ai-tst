@@ -443,15 +443,27 @@ export default function CreateExamFlow({ onCancel, onComplete }: { onCancel: () 
            <div className="space-y-4">
              {generatedQuestions.map((q, idx) => (
                <div key={idx} className="bg-slate-800 p-5 rounded-2xl border border-slate-700">
-                 <div className="font-medium text-lg mb-3" dir="auto"><span className="text-blue-500 ml-2">{q.id}.</span>{q.text}</div>
-                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                   {Object.entries(q.options).map(([key, val]) => (
-                     <div key={key} className={`p-3 rounded-lg border flex items-center ${q.correctAnswer === key ? 'bg-emerald-900/30 border-emerald-700 text-emerald-200' : 'bg-slate-900 border-slate-700 text-slate-300'}`}>
-                       <span className="font-bold ml-2">{key})</span> <span dir="auto">{val as string}</span>
-                       {q.correctAnswer === key && <span className="mr-auto text-xs font-bold tracking-wider text-emerald-500">صحيح</span>}
-                     </div>
-                   ))}
+                 <div className="font-medium text-lg mb-3" dir="auto">
+                   <span className="text-blue-500 ml-2">{q.id}.</span>
+                   <span className="text-xs text-slate-400 bg-slate-900 px-2 py-1 rounded-md ml-2">{q.type}</span>
+                   {q.text}
                  </div>
+                 {q.options && (
+                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                     {Object.entries(q.options).map(([key, val]) => (
+                       <div key={key} className={`p-3 rounded-lg border flex items-center ${q.correctAnswer === key ? 'bg-emerald-900/30 border-emerald-700 text-emerald-200' : 'bg-slate-900 border-slate-700 text-slate-300'}`}>
+                         <span className="font-bold ml-2">{key})</span> <span dir="auto">{val as string}</span>
+                         {q.correctAnswer === key && <span className="mr-auto text-xs font-bold tracking-wider text-emerald-500">صحيح</span>}
+                       </div>
+                     ))}
+                   </div>
+                 )}
+                 {q.type !== 'mcq' && (
+                   <div className="mt-3 p-3 bg-slate-900 rounded-lg border border-slate-700">
+                     <span className="text-slate-400 text-sm ml-2">الإجابة الصحيحة:</span>
+                     <span className="font-bold text-emerald-400">{q.correctAnswer || JSON.stringify(q.matchingPairs)}</span>
+                   </div>
+                 )}
                </div>
              ))}
            </div>

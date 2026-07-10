@@ -40,7 +40,11 @@ export default function LiveExamDashboard() {
     });
 
     newSocket.on('student_joined', (student) => {
-      setStudents(prev => [...prev, student]);
+      setStudents(prev => {
+         const existing = prev.find(s => s.id === student.id);
+         if (existing) return prev;
+         return [...prev, student];
+      });
       toast.success(`انضم الطالب: ${student.name}`);
     });
     

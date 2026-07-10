@@ -386,7 +386,7 @@ export default function StudentRoom({ studentData, onExit }: { studentData: any,
                {currentPage + 1}. {currentQ.text}
             </h3>
             
-            {currentQ.type === 'matching' && currentQ.matchingPairs && (
+            {currentQ.type === 'matching' || currentQ.type === 'match' && currentQ.matchingPairs && (
               <div className="space-y-4">
                 <p className="text-sm font-bold text-slate-600 dark:text-slate-300 mb-4">اختر الكلمة المناسبة لكل عنصر:</p>
                 <div className="space-y-3">
@@ -410,7 +410,7 @@ export default function StudentRoom({ studentData, onExit }: { studentData: any,
                 </div>
               </div>
             )}
-            {currentQ.type === 'image_labeling' && (
+            {currentQ.type === 'image_labeling' || currentQ.type === 'diagram' && (
                <div className="mb-6 bg-slate-100 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
                   <div className="aspect-video bg-slate-200 dark:bg-slate-800 rounded-lg flex items-center justify-center text-slate-400 mb-4 overflow-hidden relative">
                      {currentQ.imageDescription ? (
@@ -457,7 +457,7 @@ export default function StudentRoom({ studentData, onExit }: { studentData: any,
               </div>
             )}
 
-            {(currentQ.type === 'short_answer' || currentQ.type === 'fill_blanks') && (
+            {(currentQ.type === 'short_answer' || currentQ.type === 'fill_blanks' || currentQ.type === 'short' || currentQ.type === 'fill') && (
                <textarea
                  rows={4}
                  value={answers[currentQ.id] || ''}
@@ -467,7 +467,7 @@ export default function StudentRoom({ studentData, onExit }: { studentData: any,
                />
             )}
 
-            {currentQ.type === 'true_false' && (
+            {currentQ.type === 'true_false' || currentQ.type === 'tf' && (
                <div className="flex gap-4">
                  <button 
                    onClick={() => setAnswers(prev => ({...prev, [currentQ.id]: 'true'}))}

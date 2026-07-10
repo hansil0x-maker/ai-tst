@@ -92,11 +92,9 @@ async function startServer() {
       let foundStudent = null;
 
       for (const [token, session] of activeSessions.entries()) {
-        if (session.otps && session.otps[otp] && !session.otps[otp].used) {
+        if (session.otps && session.otps[otp]) {
           foundSessionToken = token;
           foundStudent = session.otps[otp];
-          // Burn the OTP
-          session.otps[otp].used = true;
           break;
         }
       }
@@ -104,7 +102,7 @@ async function startServer() {
       if (foundSessionToken && foundStudent) {
         if (callback) callback({ success: true, token: foundSessionToken, student: foundStudent });
       } else {
-        if (callback) callback({ success: false, error: 'كود الدخول غير صحيح أو تم استخدامه' });
+        if (callback) callback({ success: false, error: 'كود الدخول غير صحيح' });
       }
     });
 
@@ -294,12 +292,12 @@ CRITICAL INSTRUCTIONS FOR LLAMA 3.3:
   "questions": [
     {
       "id": 1,
-      "type": "mcq | true_false | fill_blanks | short_answer | matching | image_labeling",
+      "type": "mcq | tf | fill | short | match | diagram",
       "text": "The question text",
       "options": { "A": "...", "B": "...", "C": "...", "D": "..." }, // only for mcq
       "correctAnswer": "The exact correct answer or key",
-      "matchingPairs": [ { "left": "...", "right": "..." } ], // only for matching
-      "imageDescription": "Description of image to label if applicable" // only for image_labeling
+      "matchingPairs": [ { "left": "...", "right": "..." } ], // only for match
+      "imageDescription": "Description of image to label if applicable" // only for diagram
     }
   ], 
   "aiComment": "A brief Arabic comment to the teacher regarding the generated exam's quality or coverage." 
