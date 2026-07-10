@@ -281,14 +281,9 @@ Make sure it is perfect JSON.`;
 
       const messages: any[] = [{ role: 'user', content: fullPrompt }];
       if (files && files.length > 0) {
-        const userContent: any[] = [{ type: 'text', text: fullPrompt }];
-        files.forEach((f: any) => {
-           userContent.push({
-             type: 'image_url',
-             image_url: { url: `data:${f.mimeType};base64,${f.data}` }
-           });
-        });
-        messages[0].content = userContent;
+        // Groq text models do not support image arrays in content.
+        // We will notify the user or just ignore the image part of the prompt.
+        console.warn("Images were uploaded but Groq Llama-3.3-70b-versatile does not support vision. Ignoring images.");
       }
 
       const response = await ai.chat.completions.create({
