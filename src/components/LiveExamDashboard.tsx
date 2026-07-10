@@ -13,6 +13,8 @@ export default function LiveExamDashboard() {
   const [alerts, setAlerts] = useState<any[]>([]);
   const [earlyRequests, setEarlyRequests] = useState<any[]>([]);
   const [pendingRegistrations, setPendingRegistrations] = useState<any[]>([]);
+  const [showSessionOptions, setShowSessionOptions] = useState(false);
+  const [saveStudentsPermanently, setSaveStudentsPermanently] = useState(true);
   
   const [totalStudents, setTotalStudents] = useState<number>(30);
   const [availableDevices, setAvailableDevices] = useState<number>(4);
@@ -78,13 +80,17 @@ export default function LiveExamDashboard() {
   
   const handleApproveRegistration = async (req: any) => {
     if (socket && sessionToken) {
-      // Create new student in DB
       try {
-        const studentId = await db.students.add({
-           name: req.name,
-           classId: selectedClassId,
-           createdAt: new Date().toISOString()
-        });
+        let studentId = 0;
+        if (saveStudentsPermanently) {
+          studentId = await db.students.add({
+             name: req.name,
+             classId: selectedClassId,
+             serialNumber: Math.floor(1000 + Math.random() * 9000).toString()
+          });
+        } else {
+          studentId = Math.floor(Math.random() * 1000000);
+        }
         
         let otp;
         do {
@@ -114,12 +120,15 @@ export default function LiveExamDashboard() {
     }
   };
 
-  const handleCreateSession = () => {
+  const handleCreateSessionPrompt = () => {
     if (!socket || selectedClassId === 0 || selectedExamId === 0) {
       toast.error('يرجى اختيار الفصل والامتحان أولاً');
       return;
     }
-    
+    setShowSessionOptions(true);
+  };
+
+  const handleCreateSessionDirect = () => {
     // 1. Get available students
     const classStudents = allStudents?.filter(s => s.classId === selectedClassId && !absentStudentIds.includes(s.id!)) || [];
     if (classStudents.length === 0) {
@@ -152,6 +161,7 @@ export default function LiveExamDashboard() {
         setSubmissions([]);
         setGradedResults([]);
         setAiReport(null);
+        setShowSessionOptions(false);
         
         socket.emit('register_session_otps', { token: res.token, otpsMap });
         
@@ -164,6 +174,33 @@ export default function LiveExamDashboard() {
         });
         
         toast.success('تم إنشاء الجلسة وتوليد أكواد الدخول بنجاح');
+      }
+    });
+  };
+
+  const handleCreateSessionInvite = () => {
+    const exam = exams?.find(e => e.id === selectedExamId);
+    const cls = classes?.find(c => c.id === selectedClassId);
+
+    setSessionOtps({});
+    socket.emit('create_session', { examTitle: exam?.title, className: cls?.name }, async (res: any) => {
+      if (res.success) {
+        setSessionToken(res.token);
+        setStudents([]);
+        setSubmissions([]);
+        setGradedResults([]);
+        setAiReport(null);
+        setShowSessionOptions(false);
+        
+        // Save to DB
+        await db.examSessions.add({
+          sessionToken: res.token,
+          examId: selectedExamId,
+          batchNumber: 1,
+          createdAt: Date.now()
+        });
+        
+        toast.success(`تم فتح نقطة اتصال: ${res.token}`);
       }
     });
   };
@@ -250,9 +287,48 @@ export default function LiveExamDashboard() {
               </div>
             </div>
             
-            <button onClick={handleCreateSession} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition-colors">
-              إنشاء الجلسة وتوليد أكواد الدخول للطلاب
+            <button onClick={handleCreateSessionPrompt} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition-colors">
+              فتح نقطة اتصال / إنشاء جلسة
             </button>
+            
+            {showSessionOptions && (
+               <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+                  <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 w-full max-w-md space-y-4">
+                     <h3 className="text-xl font-bold text-white mb-4">خيارات إنشاء الجلسة</h3>
+                     
+                     <button onClick={handleCreateSessionDirect} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-colors">
+                        بدء مباشرة وتوزيع الأكواد على طلاب الفصل
+                     </button>
+                     
+                     <div className="relative flex items-center py-2">
+                       <div className="flex-grow border-t border-slate-600"></div>
+                       <span className="flex-shrink-0 mx-4 text-slate-400">أو</span>
+                       <div className="flex-grow border-t border-slate-600"></div>
+                     </div>
+                     
+                     <button onClick={handleCreateSessionInvite} className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 rounded-xl transition-colors">
+                        استدعاء طلاب مخصصين أولاً
+                     </button>
+                     
+                     <div className="flex items-center gap-2 mt-2">
+                       <input 
+                         type="checkbox" 
+                         id="savePerm"
+                         checked={saveStudentsPermanently}
+                         onChange={(e) => setSaveStudentsPermanently(e.target.checked)}
+                         className="w-4 h-4 rounded text-purple-600 bg-slate-900 border-slate-700"
+                       />
+                       <label htmlFor="savePerm" className="text-sm text-slate-300">
+                         حفظ الطلاب المستدعين كطلاب دائمين في هذا الفصل
+                       </label>
+                     </div>
+                     
+                     <button onClick={() => setShowSessionOptions(false)} className="w-full mt-4 bg-slate-700 hover:bg-slate-600 text-white py-2 rounded-xl">
+                        إلغاء
+                     </button>
+                  </div>
+               </div>
+            )}
           </div>
         ) : (
           <div className="space-y-6">

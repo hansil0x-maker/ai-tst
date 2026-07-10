@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Users, BookOpen, Lock, ShieldAlert, KeyRound } from "lucide-react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "../db/db";
@@ -107,10 +107,11 @@ export default function LockScreen({
 
     tempSocket.on('student_register_approved', (data) => {
        if (data.otp) {
-          toast.success("تم تسجيلك والموافقة عليك! جاري إدخالك للامتحان...", { id: toastId });
+          toast.success(`تمت الموافقة! الكود الخاص بك هو: ${data.otp}\nيرجى تذكره للدخول`, { id: toastId, duration: 8000 });
           setStudentToken(data.otp);
           tempSocket.disconnect();
-          setTimeout(() => onUnlocked("student", { otp: data.otp }), 1500);
+          setStudentMode("login");
+          setStudentName("");
        } else {
           toast.success("تم تسجيل بياناتك بنجاح في النظام.", { id: toastId });
           setStudentMode("login");
