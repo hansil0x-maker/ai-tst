@@ -28,6 +28,22 @@ export default function StudentRoom({ studentData, onExit }: { studentData: any,
   const [fullStudentData, setFullStudentData] = useState<any>(null);
   const [sessionToken, setSessionToken] = useState<string | null>(null);
 
+  const statusRef = useRef(status);
+  const sessionTokenRef = useRef(sessionToken);
+  const fullStudentDataRef = useRef(fullStudentData);
+  const onExitRef = useRef(onExit);
+  const answersRef = useRef(answers);
+  const examRef = useRef(exam);
+  
+  useEffect(() => {
+    statusRef.current = status;
+    sessionTokenRef.current = sessionToken;
+    fullStudentDataRef.current = fullStudentData;
+    onExitRef.current = onExit;
+    answersRef.current = answers;
+    examRef.current = exam;
+  }, [status, sessionToken, fullStudentData, onExit, answers, exam]);
+
   useEffect(() => {
     const newSocket = io('/', { path: '/socket.io' });
     
@@ -36,7 +52,7 @@ export default function StudentRoom({ studentData, onExit }: { studentData: any,
       newSocket.emit('validate_otp', { otp: studentData.otp }, (res: any) => {
         if (!res.success) {
           toast.error(res.error || 'الكود غير صحيح');
-          onExit();
+          onExitRef.current();
         } else {
           setFullStudentData(res.student);
           setSessionToken(res.token);
@@ -44,7 +60,7 @@ export default function StudentRoom({ studentData, onExit }: { studentData: any,
           newSocket.emit('join_session', { token: res.token, student: res.student }, (joinRes: any) => {
              if (!joinRes.success) {
                 toast.error('فشل الانضمام للغرفة');
-                onExit();
+                onExitRef.current();
              } else {
                 toast.success('تم قبول الكود بنجاح');
                 setStatus('waiting');
@@ -59,7 +75,7 @@ export default function StudentRoom({ studentData, onExit }: { studentData: any,
       setStatus('active');
       setTimeLeft(examPayload.duration ? examPayload.duration * 60 : 60 * 60);
       toast.success('بدأ الامتحان! حظاً موفقاً.');
-      startCameraProctoring(newSocket, fullStudentData);
+      startCameraProctoring(newSocket, fullStudentDataRef.current);
     });
 
     newSocket.on('teacher_message', (data) => {
@@ -77,7 +93,7 @@ export default function StudentRoom({ studentData, onExit }: { studentData: any,
     });
 
     newSocket.on('session_closed', () => {
-      if (status !== 'submitted') {
+      if (statusRef.current !== 'submitted') {
         toast.error('أغلق المعلم الجلسة. سيتم تسليم إجاباتك.');
         forceSubmit(newSocket);
       }
@@ -96,9 +112,9 @@ export default function StudentRoom({ studentData, onExit }: { studentData: any,
 
     // Anti-cheat: Visibility change
     const handleVisibilityChange = () => {
-      if (document.hidden && status === 'active') {
+      if (document.hidden && statusRef.current === 'active') {
          toast.error('تحذير: لا تخرج من شاشة الامتحان!');
-         newSocket.emit('cheat_alert', { token: sessionToken, student: fullStudentData, reason: 'الطالب خرج من شاشة الامتحان (تبديل تطبيقات أو متصفح)' });
+         newSocket.emit('cheat_alert', { token: sessionTokenRef.current, student: fullStudentDataRef.current, reason: 'الطالب خرج من شاشة الامتحان (تبديل تطبيقات أو متصفح)' });
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -108,7 +124,7 @@ export default function StudentRoom({ studentData, onExit }: { studentData: any,
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       newSocket.disconnect();
     };
-  }, [studentData, onExit, status, sessionToken, fullStudentData]);
+  }, [studentData.otp]);
 
   // Timer logic
   useEffect(() => {
@@ -205,17 +221,17 @@ export default function StudentRoom({ studentData, onExit }: { studentData: any,
   };
 
   const forceSubmit = (activeSocket: Socket | null) => {
-    if (!activeSocket || !exam) return;
+    if (!activeSocket || !examRef.current) return;
     performSubmission(activeSocket);
   };
 
   const performSubmission = (activeSocket: Socket) => {
     activeSocket.emit('submit_exam', {
-      token: sessionToken,
+      token: sessionTokenRef.current,
       payload: {
-        student: fullStudentData,
-        answers: answers,
-        examId: exam.id,
+        student: fullStudentDataRef.current,
+        answers: answersRef.current,
+        examId: examRef.current.id,
         submittedAt: Date.now()
       }
     });
@@ -225,8 +241,10 @@ export default function StudentRoom({ studentData, onExit }: { studentData: any,
     
     // Save to local mapping so we can attach it when teacher grades
     const pendingResults = JSON.parse(localStorage.getItem('nexus_pending_results') || '{}');
-    pendingResults[fullStudentData.name] = accessCode;
-    localStorage.setItem('nexus_pending_results', JSON.stringify(pendingResults));
+    if (fullStudentDataRef.current?.name) {
+       pendingResults[fullStudentDataRef.current.name] = accessCode;
+       localStorage.setItem('nexus_pending_results', JSON.stringify(pendingResults));
+    }
 
     setHandoverInfo({
       accessToken: accessCode,
@@ -386,7 +404,7 @@ export default function StudentRoom({ studentData, onExit }: { studentData: any,
                {currentPage + 1}. {currentQ.text}
             </h3>
             
-            {currentQ.type === 'matching' || currentQ.type === 'match' && currentQ.matchingPairs && (
+            {(currentQ.type === 'matching' || currentQ.type === 'match') && currentQ.matchingPairs && (
               <div className="space-y-4">
                 <p className="text-sm font-bold text-slate-600 dark:text-slate-300 mb-4">اختر الكلمة المناسبة لكل عنصر:</p>
                 <div className="space-y-3">
@@ -410,7 +428,7 @@ export default function StudentRoom({ studentData, onExit }: { studentData: any,
                 </div>
               </div>
             )}
-            {currentQ.type === 'image_labeling' || currentQ.type === 'diagram' && (
+            {(currentQ.type === 'image_labeling' || currentQ.type === 'diagram') && (
                <div className="mb-6 bg-slate-100 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
                   <div className="aspect-video bg-slate-200 dark:bg-slate-800 rounded-lg flex items-center justify-center text-slate-400 mb-4 overflow-hidden relative">
                      {currentQ.imageDescription ? (
@@ -467,7 +485,7 @@ export default function StudentRoom({ studentData, onExit }: { studentData: any,
                />
             )}
 
-            {currentQ.type === 'true_false' || currentQ.type === 'tf' && (
+            {(currentQ.type === 'true_false' || currentQ.type === 'tf') && (
                <div className="flex gap-4">
                  <button 
                    onClick={() => setAnswers(prev => ({...prev, [currentQ.id]: 'true'}))}
