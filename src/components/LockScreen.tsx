@@ -101,11 +101,21 @@ export default function LockScreen({
     const toastId = toast.loading("جاري إرسال الطلب للمعلم...");
     const tempSocket = io('/', { path: '/socket.io' });
     
+    let isResponded = false;
+    
     tempSocket.on('connect', () => {
        tempSocket.emit('student_register_request', { name: studentName, sessionToken: selectedSessionToken });
+       
+       setTimeout(() => {
+          if (!isResponded) {
+             toast.error('انتهى وقت الطلب. ربما لم يوافق المعلم أو الشبكة ضعيفة.', { id: toastId });
+             tempSocket.disconnect();
+          }
+       }, 20000); // 20 seconds timeout
     });
 
     tempSocket.on('student_register_approved', (data) => {
+       isResponded = true;
        if (data.otp) {
           toast.success(`تمت الموافقة! الكود الخاص بك هو: ${data.otp}\nيرجى تذكره للدخول`, { id: toastId, duration: 8000 });
           setStudentToken(data.otp);
@@ -120,16 +130,34 @@ export default function LockScreen({
     });
   };
 
-  const handleCheckResult = () => {
+  const handleCheckResult = async () => {
     if (resultToken.trim() === "") {
       setError("الرجاء إدخال رمز الوصول للنتيجة");
       return;
     }
+    setError("");
+    const toastId = toast.loading("جاري جلب النتيجة...");
+    
+    try {
+      const res = await fetch('/api/results/' + resultToken);
+      const data = await res.json();
+      if (data.success && data.resultData) {
+        setResultData(data.resultData);
+        toast.dismiss(toastId);
+        return;
+      }
+    } catch (e) {
+      console.warn("Failed to fetch result from API, trying local storage", e);
+    }
+    
+    // Fallback to local storage
     const published = JSON.parse(localStorage.getItem('nexus_published_results') || '{}');
     if (published[resultToken]) {
       setResultData(published[resultToken]);
+      toast.dismiss(toastId);
       setError("");
     } else {
+      toast.error("رمز النتيجة غير صحيح أو لم يتم نشر النتائج بعد", { id: toastId });
       setError("رمز النتيجة غير صحيح أو لم يتم نشر النتائج بعد");
     }
   };
@@ -357,7 +385,7 @@ export default function LockScreen({
         )}
       </div>
       <div className="mt-8 text-slate-500 text-sm font-mono opacity-60">
-        التحديث رقم 4.4.5
+        التحديث رقم 4.5.5
       </div>
     </div>
   );

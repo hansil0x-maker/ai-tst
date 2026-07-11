@@ -45,7 +45,17 @@ async function startServer() {
   // ---- Socket WebSockets (Hub logic) ----
     // --- Local Wi-Fi Exam Network State ---
   const activeSessions = new Map(); // token -> { teacherId, students: [] }
-  const submissionQueues = new Map(); // token -> []
+  const submissionQueues = new Map();
+  const publishedResults = new Map();
+
+  app.get('/api/results/:token', (req, res) => {
+    const resultData = publishedResults.get(req.params.token);
+    if (resultData) {
+      res.json({ success: true, resultData });
+    } else {
+      res.status(404).json({ success: false, error: 'النتيجة غير موجودة' });
+    }
+  }); // token -> []
 
   io.on('connection', (socket) => {
     console.log('A client connected. ID: ', socket.id);
@@ -168,7 +178,12 @@ async function startServer() {
 
     socket.on('deliver_results', (data) => {
       const { token, resultsList } = data;
-      // resultsList should be an array of { accessToken, resultData }
+      // Store globally for LockScreen access
+      if (Array.isArray(resultsList)) {
+        resultsList.forEach(r => {
+          publishedResults.set(r.accessToken, r.resultData);
+        });
+      }
       socket.to(token).emit('results_published', { resultsList });
     });
 socket.on('submit_exam', (data) => {
@@ -275,35 +290,60 @@ DO NOT generate any questions that are similar to the following questions previo
 
       const ai = new OpenAI({ baseURL: 'https://api.groq.com/openai/v1', apiKey });
       
-      const fullPrompt = `You are an expert teacher. Generate a comprehensive exam based on the provided content or files. 
-This exam will be delivered digitally via a local Wi-Fi PWA.
+            const fullPrompt = `You are an expert teacher. Generate a comprehensive exam based on the provided content or files. This exam will be delivered digitally via a local Wi-Fi PWA.
 ${configPrompt}
 ${avoidPrompt}
-
 Text Content:
 ${content || 'None'}
-
 Notes from teacher: ${prompt || 'None'}
-
 CRITICAL INSTRUCTIONS FOR LLAMA 3.3 (FORMATTING & TEMPLATES):
 1. You MUST generate the exact types of questions requested above. Do NOT just generate "mcq".
 2. Please return ONLY a valid JSON object matching this structure:
-{ 
-  "questions": [
+{
+   "questions": [
     {
       "id": 1,
-      "type": "mcq | tf | fill | short | match | diagram",
-      "text": "The question text",
-      // If type is "mcq":
-      "options": { "A": "...", "B": "...", "C": "...", "D": "..." },
-      "correctAnswer": "A", // MUST be the exact key from options
-      // If type is "match" or "matching":
-      "matchingPairs": [ { "left": "The prompt/term", "right": "The correct match/definition" } ],
-      // If type is "diagram" or "image_labeling":
-      "imageDescription": "A detailed description of the image the student should imagine or look at, with numbered parts 1, 2, 3, 4"
+      "type": "mcq",
+      "text": "The multiple choice question text?",
+      "options": { "A": "First option", "B": "Second option", "C": "Third option", "D": "Fourth option" },
+      "correctAnswer": "A"
+    },
+    {
+      "id": 2,
+      "type": "true_false",
+      "text": "The true or false statement.",
+      "correctAnswer": "true"
+    },
+    {
+      "id": 3,
+      "type": "fill_blanks",
+      "text": "The capital of France is ______.",
+      "correctAnswer": "Paris"
+    },
+    {
+      "id": 4,
+      "type": "short_answer",
+      "text": "Explain the water cycle briefly.",
+      "correctAnswer": "Evaporation, condensation, and precipitation."
+    },
+    {
+      "id": 5,
+      "type": "matching",
+      "text": "Match the following terms with their definitions:",
+      "matchingPairs": [
+        { "left": "Apple", "right": "A fruit" },
+        { "left": "Carrot", "right": "A vegetable" }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "image_labeling",
+      "text": "Label the parts of the plant diagram.",
+      "imageDescription": "A diagram of a plant with roots, stem, leaves, and a flower.",
+      "correctAnswer": "1: Roots, 2: Stem, 3: Leaves, 4: Flower"
     }
-  ], 
-  "aiComment": "A brief Arabic comment to the teacher regarding the generated exam's quality or coverage." 
+  ],
+   "aiComment": "A brief Arabic comment to the teacher regarding the generated exam's quality or coverage."
 }
 Make sure it is perfect JSON.`;
 

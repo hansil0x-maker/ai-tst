@@ -568,6 +568,8 @@ export default function LiveExamDashboard() {
                               score: graded.score,
                               percentage: graded.percentage,
                               category: graded.category,
+                              letterGrade: graded.letterGrade,
+                              aiFeedback: graded.aiFeedback,
                               isCheatSuspected: false
                            });
                         }
