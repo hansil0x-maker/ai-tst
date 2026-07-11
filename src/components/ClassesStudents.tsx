@@ -452,12 +452,21 @@ export default function ClassesStudents() {
                   return (
                     <div key={r.id} className="bg-slate-800/50 p-3 rounded-lg border border-slate-700/50 flex justify-between items-center">
                       <div>
-                        <p className="font-bold text-white">{exam?.title || 'امتحان محذوف'}</p>
+                        <p className="font-bold text-white flex items-center gap-2">
+                          {exam?.title || 'امتحان محذوف'}
+                          <span className={`px-2 py-0.5 rounded text-xs font-bold ${r.category === 'متفوق' ? 'bg-purple-900/50 text-purple-400' : r.category === 'ناجح' ? 'bg-emerald-900/50 text-emerald-400' : r.category === 'مكمل' ? 'bg-amber-900/50 text-amber-400' : 'bg-red-900/50 text-red-400'}`}>
+                            {r.category}
+                          </span>
+                        </p>
                         <p className="text-xs text-slate-400">{exam?.subject || ''}</p>
                       </div>
-                      <div className="text-left">
-                        <span className={`font-bold text-lg ${r.percentage >= 50 ? 'text-emerald-400' : 'text-red-400'}`}>{r.percentage}%</span>
-                        <p className="text-xs text-slate-500">{r.score} من {exam?.questions.length || '?'}</p>
+                      <div className="text-left flex items-center gap-3">
+                        <div className="flex flex-col items-end">
+                          <span className={`font-bold text-lg ${r.percentage >= 50 ? 'text-emerald-400' : 'text-red-400'}`}>{r.percentage}%</span>
+                          <p className="text-xs text-slate-500">{r.score} درجة</p>
+                        </div>
+                        {/*@ts-ignore*/}
+                        {r.letterGrade && <span className="text-2xl font-black text-slate-300 opacity-80">{r.letterGrade}</span>}
                       </div>
                     </div>
                   );

@@ -285,8 +285,8 @@ ${content || 'None'}
 
 Notes from teacher: ${prompt || 'None'}
 
-CRITICAL INSTRUCTIONS FOR LLAMA 3.3:
-1. You MUST generate the exact types of questions requested above. Do NOT just generate "mcq". If asked to distribute among types like true_false, fill_blanks, short_answer, you MUST include them.
+CRITICAL INSTRUCTIONS FOR LLAMA 3.3 (FORMATTING & TEMPLATES):
+1. You MUST generate the exact types of questions requested above. Do NOT just generate "mcq".
 2. Please return ONLY a valid JSON object matching this structure:
 { 
   "questions": [
@@ -294,10 +294,13 @@ CRITICAL INSTRUCTIONS FOR LLAMA 3.3:
       "id": 1,
       "type": "mcq | tf | fill | short | match | diagram",
       "text": "The question text",
-      "options": { "A": "...", "B": "...", "C": "...", "D": "..." }, // only for mcq
-      "correctAnswer": "The exact correct answer or key",
-      "matchingPairs": [ { "left": "...", "right": "..." } ], // only for match
-      "imageDescription": "Description of image to label if applicable" // only for diagram
+      // If type is "mcq":
+      "options": { "A": "...", "B": "...", "C": "...", "D": "..." },
+      "correctAnswer": "A", // MUST be the exact key from options
+      // If type is "match" or "matching":
+      "matchingPairs": [ { "left": "The prompt/term", "right": "The correct match/definition" } ],
+      // If type is "diagram" or "image_labeling":
+      "imageDescription": "A detailed description of the image the student should imagine or look at, with numbered parts 1, 2, 3, 4"
     }
   ], 
   "aiComment": "A brief Arabic comment to the teacher regarding the generated exam's quality or coverage." 
@@ -372,7 +375,8 @@ Respond ONLY in valid JSON format:
       "studentName": "string",
       "score": number,
       "percentage": number,
-      "category": "ناجح" | "راسب" | "مكمل",
+      "category": "متفوق" | "ناجح" | "مكمل" | "راسب",
+      "letterGrade": "A" | "B" | "C" | "D" | "F",
       "aiFeedback": "Brief Arabic comment on the student's performance"
     }
   ]

@@ -346,6 +346,37 @@ export default function Exams() {
                 </div>
               ))}
             </div>
+
+            {(() => {
+               const examResults = results.filter(r => r.examId === viewExam.id);
+               if (examResults.length > 0) {
+                 return (
+                   <div className="mt-8 pt-6 border-t border-slate-700">
+                     <h4 className="text-xl font-bold text-white mb-4">نتائج الطلاب ({examResults.length})</h4>
+                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {examResults.map(r => (
+                           <div key={r.id} className="bg-slate-800 p-3 rounded-xl border border-slate-700 flex justify-between items-center">
+                              <div>
+                                 <p className="text-white font-bold">{r.studentName}</p>
+                                 <span className={`px-2 py-0.5 rounded text-xs font-bold ${r.category === 'متفوق' ? 'bg-purple-900/50 text-purple-400' : r.category === 'ناجح' ? 'bg-emerald-900/50 text-emerald-400' : r.category === 'مكمل' ? 'bg-amber-900/50 text-amber-400' : 'bg-red-900/50 text-red-400'}`}>{r.category}</span>
+                              </div>
+                              <div className="text-left flex items-center gap-3">
+                                 <div className="flex flex-col items-end">
+                                   <span className={`font-bold text-lg ${r.percentage >= 50 ? 'text-emerald-400' : 'text-red-400'}`}>{Math.round(r.percentage)}%</span>
+                                   <p className="text-xs text-slate-500">{r.score} درجة</p>
+                                 </div>
+                                 {/*@ts-ignore*/}
+                                 {r.letterGrade && <span className="text-xl font-black text-slate-300 opacity-80">{r.letterGrade}</span>}
+                              </div>
+                           </div>
+                        ))}
+                     </div>
+                   </div>
+                 );
+               }
+               return null;
+            })()}
+
             <div className="mt-6 flex justify-end">
               <button
                 onClick={() => setViewExam(null)}

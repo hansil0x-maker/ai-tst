@@ -26,6 +26,7 @@ export default function StudentRoom({ studentData, onExit }: { studentData: any,
   const [cameraActive, setCameraActive] = useState(false);
 
   const [fullStudentData, setFullStudentData] = useState<any>(null);
+  const [showInstructions, setShowInstructions] = useState(false);
   const [sessionToken, setSessionToken] = useState<string | null>(null);
 
   const statusRef = useRef(status);
@@ -73,8 +74,9 @@ export default function StudentRoom({ studentData, onExit }: { studentData: any,
     newSocket.on('receive_exam', (examPayload) => {
       setExam(examPayload);
       setStatus('active');
+      setShowInstructions(true);
       setTimeLeft(examPayload.duration ? examPayload.duration * 60 : 60 * 60);
-      toast.success('بدأ الامتحان! حظاً موفقاً.');
+      toast('تم بدء الامتحان، نتمنى لك التوفيق!', { icon: '🚀', duration: 4000 });
       startCameraProctoring(newSocket, fullStudentDataRef.current);
     });
 
@@ -131,15 +133,17 @@ export default function StudentRoom({ studentData, onExit }: { studentData: any,
     if (status === 'active') {
       const timer = setInterval(() => {
         setTimeLeft(prev => {
-          const halfTime = Math.floor((exam?.duration || 60) * 60 / 2);
+          const totalTime = (exam?.duration || 60) * 60;
+          const halfTime = Math.floor(totalTime / 2);
+          
           if (prev === halfTime) {
-            toast('انقضى نصف الوقت', { icon: '⏳' });
+            toast('انقضى نصف الوقت، راجع إجاباتك', { icon: '⏳', duration: 5000 });
           }
-          if (prev === Math.floor(halfTime * 0.75)) {
-            toast('خذ نفساً عميقاً وحافظ على تركيزك (Take a deep breath and focus)', { icon: '🌿' });
+          if (prev === 5 * 60 && totalTime > 10 * 60) {
+            toast('5 دقائق متبقية (5 minutes remaining)', { icon: '⏰', duration: 5000 });
           }
-          if (prev === 10 * 60 && (exam?.duration || 60) > 10) {
-            toast('10 دقائق متبقية (10 minutes remaining)', { icon: '⏰' });
+          if (prev === 1 * 60) {
+            toast('دقيقة واحدة متبقية! يرجى إنهاء الإجابة.', { icon: '⚠️', duration: 5000, style: { background: '#ef4444', color: '#fff' } });
           }
           if (prev <= 1) {
             clearInterval(timer);
@@ -356,6 +360,33 @@ export default function StudentRoom({ studentData, onExit }: { studentData: any,
   const currentQ = questions[currentPage];
   const totalQ = questions.length;
   const answeredQ = Object.keys(answers).length;
+
+  if (showInstructions) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
+        <div className="bg-slate-900 p-8 rounded-3xl border border-slate-700 max-w-lg w-full shadow-2xl relative overflow-hidden animate-in fade-in zoom-in duration-300">
+           <div className="absolute top-0 left-0 w-full h-2 bg-blue-500"></div>
+           <ShieldCheck size={64} className="mx-auto text-blue-500 mb-6" />
+           <h2 className="text-3xl font-bold text-white text-center mb-6">تعليمات الامتحان</h2>
+           
+           <ul className="text-slate-300 space-y-4 mb-8 text-right list-disc list-inside">
+             <li>ممنوع الخروج من متصفح الامتحان أو فتح علامات تبويب أخرى.</li>
+             <li>الكاميرا تلتقط صورتك للتأكد من عدم وجود أشخاص آخرين.</li>
+             <li>استمر في التركيز وحل الأسئلة في الوقت المحدد.</li>
+             <li>يمكنك طلب إنهاء الامتحان مبكراً وسينظر المعلم في طلبك.</li>
+           </ul>
+
+           <button 
+             onClick={() => setShowInstructions(false)}
+             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xl py-4 rounded-xl transition-colors shadow-lg shadow-blue-500/30 flex items-center justify-center gap-2"
+           >
+             <CheckCircle2 size={24} />
+             فهمت التعليمات، ابدأ
+           </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col">

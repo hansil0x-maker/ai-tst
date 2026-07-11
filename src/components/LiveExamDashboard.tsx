@@ -34,6 +34,9 @@ export default function LiveExamDashboard() {
   const allStudents = useLiveQuery(() => db.students.toArray());
   const exams = useLiveQuery(() => db.exams.toArray());
 
+  const [showSessionsLog, setShowSessionsLog] = useState(false);
+  const examSessionsLog = useLiveQuery(() => db.examSessions.toArray()) || [];
+
   useEffect(() => {
     const newSocket = io('/', { path: '/socket.io' });
     
@@ -267,10 +270,43 @@ export default function LiveExamDashboard() {
   return (
     <div className="space-y-6">
       <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700">
-        <h2 className="text-xl font-bold text-white flex items-center gap-2 mb-4">
-          <ShieldAlert className="text-blue-500" />
-          نظام الامتحانات الرقمية (بدون إنترنت)
-        </h2>
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-bold text-white flex items-center gap-2">
+            <ShieldAlert className="text-blue-500" />
+            نظام الامتحانات الرقمية (بدون إنترنت)
+          </h2>
+          <button 
+            onClick={() => setShowSessionsLog(!showSessionsLog)} 
+            className="text-sm bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-1 rounded transition-colors"
+          >
+            {showSessionsLog ? 'إخفاء سجل الجلسات' : 'سجل الجلسات السابقة'}
+          </button>
+        </div>
+        
+        {showSessionsLog && (
+           <div className="mb-6 bg-slate-900 border border-slate-700 p-4 rounded-xl max-h-64 overflow-y-auto">
+              <h3 className="text-lg font-bold text-slate-300 mb-3 border-b border-slate-700 pb-2">سجل الجلسات</h3>
+              {examSessionsLog.length === 0 ? (
+                <p className="text-sm text-slate-500">لا توجد جلسات سابقة.</p>
+              ) : (
+                <div className="space-y-2">
+                   {examSessionsLog.sort((a,b) => b.createdAt - a.createdAt).map(log => {
+                      const ex = exams?.find(e => e.id === log.examId);
+                      return (
+                        <div key={log.id} className="flex justify-between items-center p-3 bg-slate-800 rounded-lg border border-slate-700">
+                           <div>
+                              <p className="text-white font-bold">{ex?.title || 'امتحان غير معروف'}</p>
+                              <p className="text-xs text-slate-400">{new Date(log.createdAt).toLocaleString('ar-EG')} - دفعة {log.batchNumber}</p>
+                           </div>
+                           <span className="text-blue-400 font-mono tracking-widest bg-blue-900/30 px-2 py-1 rounded">{log.sessionToken}</span>
+                        </div>
+                      );
+                   })}
+                </div>
+              )}
+           </div>
+        )}
+
         <p className="text-slate-400 text-sm mb-6">
           يسمح هذا النظام بإرسال الامتحانات مباشرة إلى أجهزة الطلاب المتصلة بنفس شبكة الـ Wi-Fi.
         </p>

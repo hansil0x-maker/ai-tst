@@ -141,11 +141,12 @@ export default function LockScreen({
             <h2 className="text-2xl font-bold text-white mb-6 border-b border-slate-700 pb-4">نتيجة الامتحان</h2>
             <p className="text-slate-400 mb-2">الطالب: <strong className="text-white">{resultData.studentName}</strong></p>
             
-            <div className="my-6">
-               <div className={`w-32 h-32 mx-auto rounded-full flex items-center justify-center border-4 ${resultData.category === 'ناجح' ? 'border-emerald-500 bg-emerald-900/30 text-emerald-400' : resultData.category === 'مكمل' ? 'border-amber-500 bg-amber-900/30 text-amber-400' : 'border-red-500 bg-red-900/30 text-red-400'}`}>
+            <div className="my-6 flex flex-col items-center">
+               <div className={`w-32 h-32 mx-auto rounded-full flex flex-col items-center justify-center border-4 ${resultData.category === 'متفوق' ? 'border-purple-500 bg-purple-900/30 text-purple-400' : resultData.category === 'ناجح' ? 'border-emerald-500 bg-emerald-900/30 text-emerald-400' : resultData.category === 'مكمل' ? 'border-amber-500 bg-amber-900/30 text-amber-400' : 'border-red-500 bg-red-900/30 text-red-400'}`}>
                  <span className="text-4xl font-bold">{Math.round(resultData.percentage)}%</span>
+                 {resultData.letterGrade && <span className="text-xl font-black opacity-80 mt-1">{resultData.letterGrade}</span>}
                </div>
-               <p className="text-xl font-bold mt-4">{resultData.category}</p>
+               <p className="text-2xl font-bold mt-4">{resultData.category}</p>
             </div>
             
             <div className="bg-slate-900 p-4 rounded-xl border border-slate-700 text-right mb-6">
@@ -280,6 +281,19 @@ export default function LockScreen({
              <h1 className="text-2xl font-bold text-white">الاستعلام عن النتيجة</h1>
              <p className="text-slate-400">أدخل رمز الوصول الخاص بك لرؤية نتيجتك التفصيلية</p>
              
+             {(() => {
+                const pending = JSON.parse(localStorage.getItem('nexus_pending_results') || '{}');
+                const count = Object.keys(pending).length;
+                if (count > 0) {
+                   return (
+                     <div className="bg-emerald-900/20 border border-emerald-800/50 p-3 rounded-xl mb-4">
+                        <p className="text-emerald-300 text-sm">أكمل <strong>{count}</strong> طلاب امتحانهم على هذا الجهاز.</p>
+                     </div>
+                   );
+                }
+                return null;
+             })()}
+
              <input
                type="text"
                value={resultToken}
@@ -343,7 +357,7 @@ export default function LockScreen({
         )}
       </div>
       <div className="mt-8 text-slate-500 text-sm font-mono opacity-60">
-        التحديث رقم 4.4.4
+        التحديث رقم 4.4.5
       </div>
     </div>
   );
