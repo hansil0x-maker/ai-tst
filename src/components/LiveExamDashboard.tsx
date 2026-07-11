@@ -18,6 +18,8 @@ export default function LiveExamDashboard() {
   
   const [totalStudents, setTotalStudents] = useState<number>(30);
   const [availableDevices, setAvailableDevices] = useState<number>(4);
+  const [sessionDuration, setSessionDuration] = useState<number>(30);
+  const [currentBatchIndex, setCurrentBatchIndex] = useState<number>(0);
   const [selectedClassId, setSelectedClassId] = useState<number>(0);
   const [selectedExamId, setSelectedExamId] = useState<number>(0);
   const [absentStudentIds, setAbsentStudentIds] = useState<number[]>([]);
@@ -140,8 +142,14 @@ export default function LiveExamDashboard() {
       return;
     }
     
-    // 2. Select batch
-    const batch = classStudents.slice(0, availableDevices);
+    // 2. Select batch based on currentBatchIndex
+    const batchStart = currentBatchIndex * availableDevices;
+    const batch = classStudents.slice(batchStart, batchStart + availableDevices);
+
+    if (batch.length === 0) {
+      toast.error('تم الانتهاء من جميع الطلاب المتاحين في هذا الفصل');
+      return;
+    }
     
     // 3. Generate OTPs
     const otpsMap: Record<string, any> = {};
@@ -173,13 +181,21 @@ export default function LiveExamDashboard() {
         await db.examSessions.add({
           sessionToken: res.token,
           examId: selectedExamId,
-          batchNumber: 1,
+          batchNumber: currentBatchIndex + 1,
           createdAt: Date.now()
         });
         
-        toast.success('تم إنشاء الجلسة وتوليد أكواد الدخول بنجاح');
+        toast.success(`تم إنشاء الجلسة (الدفعة ${currentBatchIndex + 1}) وتوليد الأكواد بنجاح`);
       }
     });
+  };
+
+  const handleNextBatch = () => {
+    setCurrentBatchIndex(prev => prev + 1);
+    setSessionToken(null);
+    setTimeout(() => {
+      handleCreateSessionDirect();
+    }, 100); // slight delay to allow state reset
   };
 
   const handleCreateSessionInvite = () => {
@@ -200,7 +216,7 @@ export default function LiveExamDashboard() {
         await db.examSessions.add({
           sessionToken: res.token,
           examId: selectedExamId,
-          batchNumber: 1,
+          batchNumber: currentBatchIndex + 1,
           createdAt: Date.now()
         });
         
@@ -211,9 +227,7 @@ export default function LiveExamDashboard() {
 
   const handleMarkAbsent = (studentId: number) => {
      setAbsentStudentIds(prev => [...prev, studentId]);
-     toast('تم تسجيل غياب الطالب، يرجى إنشاء جلسة الدفعة لتحديث القائمة.', { icon: '🔄' });
-     // Force recreate session effectively or just prompt teacher to restart session
-     setSessionToken(null); 
+     toast('تم تسجيل غياب الطالب، يرجى إعادة إنشاء الجلسة لتحديث القائمة.', { icon: '🔄' });
   };
 
   const handleSendQuickMessage = () => {
@@ -231,13 +245,20 @@ export default function LiveExamDashboard() {
     
     const exam = exams?.find(e => e.id === selectedExamId);
     if (!exam) return;
+    
+    // Inject custom duration for the session so it overrides the default exam duration
+    const customExamPayload = {
+      ...exam,
+      duration: sessionDuration
+    };
 
     socket.emit('send_exam', {
       token: sessionToken,
-      examPayload: exam
+      examPayload: customExamPayload,
+      durationMinutes: sessionDuration
     });
     
-    toast.success('تم إرسال الامتحان للطلاب');
+    toast.success('تم إرسال الامتحان للطلاب وتم بدء المؤقت');
   };
 
   // Lock-step condition
@@ -284,10 +305,27 @@ export default function LiveExamDashboard() {
                </select>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-4 mb-4">
               <div>
-                 <label className="block text-sm text-slate-300 mb-1">الأجهزة المتاحة في القاعة</label>
-                 <input type="number" value={availableDevices} onChange={e => setAvailableDevices(parseInt(e.target.value))} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white outline-none" />
+                 <label className="block text-sm text-slate-300 mb-1">عدد الأجهزة المتاحة</label>
+                 <input type="number" min="1" value={availableDevices} onChange={e => setAvailableDevices(parseInt(e.target.value) || 1)} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white outline-none" />
+              </div>
+              <div>
+                 <label className="block text-sm text-slate-300 mb-1">عدد الطلاب الإجمالي</label>
+                 <input type="number" min="1" value={totalStudents} onChange={e => setTotalStudents(parseInt(e.target.value) || 1)} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white outline-none" />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <div>
+                 <label className="block text-sm text-slate-300 mb-1">مدة الجلسة الواحدة (دقائق)</label>
+                 <input type="number" min="1" value={sessionDuration} onChange={e => setSessionDuration(parseInt(e.target.value) || 1)} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white outline-none" />
+              </div>
+              <div>
+                 <label className="block text-sm text-slate-300 mb-1">ملخص الجلسات</label>
+                 <div className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-slate-300 text-sm flex flex-col justify-center h-[50px]">
+                    <span>{Math.ceil(totalStudents / availableDevices)} جلسات × {sessionDuration} دقيقة = <strong className="text-blue-400">{Math.ceil(totalStudents / availableDevices) * sessionDuration} دقيقة</strong></span>
+                 </div>
               </div>
             </div>
             
@@ -338,8 +376,11 @@ export default function LiveExamDashboard() {
           <div className="space-y-6">
             <div className="bg-slate-900 p-6 rounded-xl border border-slate-700">
                <h3 className="text-white font-bold mb-4 flex items-center justify-between">
-                 <span>أكواد الدخول للطلاب (الدفعة الحالية)</span>
-                 <button onClick={() => setSessionToken(null)} className="text-sm bg-red-900/50 text-red-400 px-3 py-1 rounded hover:bg-red-900 transition-colors">إنهاء الجلسة</button>
+                 <span>أكواد الدخول للطلاب (الدفعة {currentBatchIndex + 1})</span>
+                 <div className="flex gap-2">
+                   <button onClick={handleNextBatch} className="text-sm bg-blue-900/50 text-blue-400 px-3 py-1 rounded hover:bg-blue-900 transition-colors">الجلسة التالية</button>
+                   <button onClick={() => setSessionToken(null)} className="text-sm bg-red-900/50 text-red-400 px-3 py-1 rounded hover:bg-red-900 transition-colors">إنهاء كلي</button>
+                 </div>
                </h3>
                
                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
