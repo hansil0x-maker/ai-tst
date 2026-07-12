@@ -369,7 +369,7 @@ export default function Exams() {
                            <div key={r.id} className="bg-slate-800 p-3 rounded-xl border border-slate-700 flex justify-between items-center">
                               <div>
                                  <p className="text-white font-bold">{r.studentName}</p>
-                                 <span className={`px-2 py-0.5 rounded text-xs font-bold ${r.category === 'متفوق' ? 'bg-purple-900/50 text-purple-400' : r.category === 'ناجح' ? 'bg-emerald-900/50 text-emerald-400' : r.category === 'مكمل' ? 'bg-amber-900/50 text-amber-400' : 'bg-red-900/50 text-red-400'}`}>{r.category}</span>
+                                 <span className={`px-2 py-0.5 rounded text-xs font-bold ${r.category === 'Perfect' ? 'bg-purple-900/50 text-purple-400' : r.category === 'Pass' ? 'bg-emerald-900/50 text-emerald-400' : 'bg-red-900/50 text-red-400'}`}>{r.category === 'Perfect' ? 'متفوق' : r.category === 'Pass' ? 'ناجح' : 'راسب'}</span>
                               </div>
                               <div className="text-left flex items-center gap-3">
                                  <div className="flex flex-col items-end">
@@ -472,7 +472,6 @@ export default function Exams() {
                                            score: newScore,
                                            percentage,
                                            category: category as any,
-                                           letterGrade,
                                            needsGrading: stillNeedsReview
                                         });
 

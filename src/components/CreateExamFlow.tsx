@@ -14,7 +14,8 @@ export default function CreateExamFlow({ onCancel, onComplete }: { onCancel: () 
   const uniqueSubjects = Array.from(new Set(pastExams.map(e => e.subject))).filter(Boolean);
   
   const [step, setStep] = useState(1);
-  
+  const [title, setTitle] = useState('');
+  const [classId, setClassId] = useState(0);
   const [grade, setGrade] = useState('الصف الأول');
   const [topic, setTopic] = useState('');
   const [difficulty, setDifficulty] = useState('متوسط');

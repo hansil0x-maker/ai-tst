@@ -454,8 +454,8 @@ export default function ClassesStudents() {
                       <div>
                         <p className="font-bold text-white flex items-center gap-2">
                           {exam?.title || 'امتحان محذوف'}
-                          <span className={`px-2 py-0.5 rounded text-xs font-bold ${r.category === 'متفوق' ? 'bg-purple-900/50 text-purple-400' : r.category === 'ناجح' ? 'bg-emerald-900/50 text-emerald-400' : r.category === 'مكمل' ? 'bg-amber-900/50 text-amber-400' : 'bg-red-900/50 text-red-400'}`}>
-                            {r.category}
+                          <span className={`px-2 py-0.5 rounded text-xs font-bold ${r.category === 'Perfect' ? 'bg-purple-900/50 text-purple-400' : r.category === 'Pass' ? 'bg-emerald-900/50 text-emerald-400' : 'bg-red-900/50 text-red-400'}`}>
+                            {r.category === 'Perfect' ? 'متفوق' : r.category === 'Pass' ? 'ناجح' : 'راسب'}
                           </span>
                         </p>
                         <p className="text-xs text-slate-400">{exam?.subject || ''}</p>
