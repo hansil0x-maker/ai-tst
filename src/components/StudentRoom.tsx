@@ -7,6 +7,7 @@ export default function StudentRoom({ studentData, onExit }: { studentData: any,
   const [socket, setSocket] = useState<Socket | null>(null);
   const [status, setStatus] = useState<'waiting' | 'active' | 'submitted' | 'disconnected'>('waiting');
   const [exam, setExam] = useState<any>(null);
+  const [accessCode, setAccessCode] = useState<string | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   
   // Pagination
@@ -17,10 +18,6 @@ export default function StudentRoom({ studentData, onExit }: { studentData: any,
   const [earlySubmitRequested, setEarlySubmitRequested] = useState(false);
   const [earlySubmitApproved, setEarlySubmitApproved] = useState(false);
   
-  // Handover state
-  const [handoverCountdown, setHandoverCountdown] = useState(60);
-  const [handoverInfo, setHandoverInfo] = useState<any>(null);
-
   // Anti-cheat
   const videoRef = useRef<HTMLVideoElement>(null);
   const [cameraActive, setCameraActive] = useState(false);
@@ -28,6 +25,8 @@ export default function StudentRoom({ studentData, onExit }: { studentData: any,
   const [fullStudentData, setFullStudentData] = useState<any>(null);
   const [showInstructions, setShowInstructions] = useState(false);
   const [sessionToken, setSessionToken] = useState<string | null>(null);
+  const [wipeoutCountdown, setWipeoutCountdown] = useState<number | null>(null);
+  const [resultView, setResultView] = useState<any>(null);
 
   const statusRef = useRef(status);
   const sessionTokenRef = useRef(sessionToken);
@@ -46,10 +45,25 @@ export default function StudentRoom({ studentData, onExit }: { studentData: any,
   }, [status, sessionToken, fullStudentData, onExit, answers, exam]);
 
   useEffect(() => {
+    if (wipeoutCountdown !== null && wipeoutCountdown > 0) {
+      const timer = setInterval(() => {
+        setWipeoutCountdown(prev => (prev !== null ? prev - 1 : null));
+      }, 1000);
+      return () => clearInterval(timer);
+    } else if (wipeoutCountdown === 0) {
+      setExam(null);
+      setAnswers({});
+      setFullStudentData(null);
+      setSessionToken(null);
+      setResultView(null);
+      onExitRef.current();
+    }
+  }, [wipeoutCountdown]);
+
+  useEffect(() => {
     const newSocket = io('/', { path: '/socket.io' });
     
     newSocket.on('connect', () => {
-      // Step 1: Validate OTP
       newSocket.emit('validate_otp', { otp: studentData.otp }, (res: any) => {
         if (!res.success) {
           toast.error(res.error || 'الكود غير صحيح');
@@ -57,7 +71,6 @@ export default function StudentRoom({ studentData, onExit }: { studentData: any,
         } else {
           setFullStudentData(res.student);
           setSessionToken(res.token);
-          // Step 2: Join Session
           newSocket.emit('join_session', { token: res.token, student: res.student }, (joinRes: any) => {
              if (!joinRes.success) {
                 toast.error('فشل الانضمام للغرفة');
@@ -86,19 +99,22 @@ export default function StudentRoom({ studentData, onExit }: { studentData: any,
 
     newSocket.on('results_published', (data) => {
       const { resultsList } = data;
-      // Save all published results to local storage so students can check them later using their access code
       const existing = JSON.parse(localStorage.getItem('nexus_published_results') || '{}');
       resultsList.forEach((r: any) => {
          existing[r.accessToken] = r.resultData;
+         if (r.resultData.studentName === fullStudentDataRef.current?.name) {
+            setResultView(r.resultData);
+         }
       });
       localStorage.setItem('nexus_published_results', JSON.stringify(existing));
     });
 
     newSocket.on('session_closed', () => {
-      if (statusRef.current !== 'submitted') {
+      if (statusRef.current === 'active') {
         toast.error('أغلق المعلم الجلسة. سيتم تسليم إجاباتك.');
         forceSubmit(newSocket);
       }
+      setWipeoutCountdown(10);
     });
 
     newSocket.on('disconnect', () => {
@@ -112,22 +128,21 @@ export default function StudentRoom({ studentData, onExit }: { studentData: any,
 
     setSocket(newSocket);
 
-    // Anti-cheat: Visibility change
     const handleVisibilityChange = () => {
       if (document.hidden && statusRef.current === 'active') {
          toast.error('تحذير: لا تخرج من شاشة الامتحان!');
          newSocket.emit('cheat_alert', { token: sessionTokenRef.current, student: fullStudentDataRef.current, reason: 'الطالب خرج من شاشة الامتحان (تبديل تطبيقات أو متصفح)' });
       }
     };
+    
     document.addEventListener('visibilitychange', handleVisibilityChange);
-
+    
     return () => {
-      stopCamera();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       newSocket.disconnect();
+      stopCamera();
     };
-  }, [studentData.otp]);
-
+  }, [studentData, onExit]);
   // Timer logic
   useEffect(() => {
     if (status === 'active') {
@@ -157,28 +172,12 @@ export default function StudentRoom({ studentData, onExit }: { studentData: any,
     }
   }, [status, exam, socket]);
 
-  // Handover Countdown
-  useEffect(() => {
-    if (status === 'submitted') {
-      const timer = setInterval(() => {
-        setHandoverCountdown(prev => {
-          if (prev <= 1) {
-             clearInterval(timer);
-             onExit();
-             return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-      return () => clearInterval(timer);
-    }
-  }, [status, onExit]);
-
   const startCameraProctoring = async (activeSocket: Socket | null, student: any) => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { width: { ideal: 320 }, height: { ideal: 240 }, facingMode: 'user' } 
-      });
+        video: { width: { ideal: 320 }, height: { ideal: 240 }, facingMode: 'user' }
+      }); 
+  
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         setCameraActive(true);
@@ -239,22 +238,24 @@ export default function StudentRoom({ studentData, onExit }: { studentData: any,
         submittedAt: Date.now()
       }
     });
+
     
     // Generate dynamic info
-    const accessCode = Math.floor(1000 + Math.random() * 9000).toString();
+    const newAccessCode = Math.floor(1000 + Math.random() * 9000).toString();
     
     // Save to local mapping so we can attach it when teacher grades
     const pendingResults = JSON.parse(localStorage.getItem('nexus_pending_results') || '{}');
     if (fullStudentDataRef.current?.name) {
-       pendingResults[fullStudentDataRef.current.name] = accessCode;
+       pendingResults[fullStudentDataRef.current.name] = newAccessCode;
        localStorage.setItem('nexus_pending_results', JSON.stringify(pendingResults));
     }
 
-    setHandoverInfo({
-      accessToken: accessCode,
-      nextStudent: "الطالب التالي",
-      nextCode: Math.floor(1000 + Math.random() * 9000).toString()
-    });
+    setAccessCode(newAccessCode);
+    //
+
+
+
+
     
     stopCamera();
     setStatus('submitted');
@@ -287,9 +288,25 @@ export default function StudentRoom({ studentData, onExit }: { studentData: any,
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
+  const wipeoutOverlay = wipeoutCountdown !== null ? (
+    <div className="fixed inset-0 z-[100] bg-red-950/90 backdrop-blur-md flex flex-col items-center justify-center p-6 animate-in fade-in duration-300">
+       <AlertTriangle size={80} className="text-red-500 mb-6 animate-bounce" />
+       <h1 className="text-4xl font-black text-white mb-4 text-center leading-relaxed">
+          تنبيه لتطهير الجهاز وبدء الجلسة التالية
+       </h1>
+       <div className="text-9xl font-black text-red-500 my-8 font-mono tabular-nums">
+          {wipeoutCountdown}
+       </div>
+       <p className="text-2xl text-red-200 text-center font-bold">
+          سيتم إغلاق الشاشة وإخفاء بياناتك الحالية فور انتهاء العداد...
+       </p>
+    </div>
+  ) : null;
+
   if (status === 'disconnected') {
      return (
        <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
+          {wipeoutOverlay}
           <div className="bg-red-900/30 p-8 rounded-2xl border border-red-800 text-center max-w-md">
              <h2 className="text-2xl font-bold text-red-400 mb-4">انقطع الاتصال بالخادم</h2>
              <p className="text-slate-300 mb-6">يرجى التأكد من اتصالك بنفس الشبكة المحلية للمعلم.</p>
@@ -302,34 +319,85 @@ export default function StudentRoom({ studentData, onExit }: { studentData: any,
   if (status === 'submitted') {
      return (
        <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
-          <div className="bg-slate-900 p-8 rounded-3xl border border-slate-700 max-w-lg w-full text-center animate-in zoom-in duration-500 shadow-2xl relative overflow-hidden">
-             <div className="absolute top-0 left-0 w-full h-2 bg-emerald-500"></div>
-             
-             <CheckCircle2 size={80} className="mx-auto text-emerald-500 mb-6 drop-shadow-[0_0_15px_rgba(16,185,129,0.5)]" />
-             <h2 className="text-3xl font-bold text-white mb-4">تم تسليم إجاباتك بأمان!</h2>
-             
-             <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 mb-6 text-right">
-                <p className="text-slate-300 mb-2 leading-relaxed">
-                   سيتم عرض نتيجتك على هذا الجهاز بعد انتهاء جميع الجلسات باستخدام رمز الوصول الخاص بك:
-                </p>
-                <div className="text-center text-4xl font-mono font-bold text-blue-400 tracking-widest my-4">
-                   {handoverInfo?.accessToken}
+          {wipeoutOverlay}
+          {!resultView ? (
+             <div className="bg-slate-900 p-8 rounded-3xl border border-slate-700 max-w-lg w-full text-center animate-in zoom-in duration-500 shadow-2xl relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-full h-2 bg-emerald-500"></div>
+                
+                <CheckCircle2 size={80} className="mx-auto text-emerald-500 mb-6 drop-shadow-[0_0_15px_rgba(16,185,129,0.5)]" />
+                <h2 className="text-3xl font-bold text-white mb-4">تم تسليم إجاباتك بأمان!</h2>
+                
+                <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 mb-6 text-center">
+                   <p className="text-slate-300 mb-2 leading-relaxed">
+                      يرجى التزام الهدوء والانتظار في مكانك حتى ينشر المعلم النتيجة أو يغلق الجلسة.
+                   </p>
+                   {accessCode && (
+                     <div className="mt-4 p-4 bg-slate-900 rounded-lg border border-emerald-900/50">
+                        <p className="text-sm text-slate-400 mb-1">رمز وصولك للنتيجة لاحقاً:</p>
+                        <p className="text-2xl font-mono font-bold text-emerald-400 tracking-widest">{accessCode}</p>
+                     </div>
+                   )}
+                   <Loader2 className="mx-auto mt-4 text-blue-500 animate-spin" size={32} />
                 </div>
              </div>
+          ) : (
+             <div className="bg-slate-900 p-8 rounded-3xl border border-slate-700 max-w-2xl w-full text-right animate-in zoom-in duration-500 shadow-2xl relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-full h-2 bg-blue-500"></div>
+                
+                <h2 className="text-3xl font-bold text-white mb-6 text-center">نتيجة التقييم</h2>
+                
+                <div className="flex items-center justify-between bg-slate-800 p-6 rounded-2xl border border-slate-700 mb-6">
+                   <div className="text-center">
+                      <span className="block text-sm text-slate-400 mb-1">الدرجة الكلية</span>
+                      <strong className="text-3xl text-white font-mono">{resultView.score} / {exam?.totalMarks}</strong>
+                   </div>
+                   <div className="text-center">
+                      <span className="block text-sm text-slate-400 mb-1">النسبة المئوية</span>
+                      <strong className={`text-4xl font-mono font-black ${resultView.percentage >= 50 ? 'text-emerald-400' : 'text-red-400'}`}>{resultView.percentage}%</strong>
+                   </div>
+                   <div className="text-center">
+                      <span className="block text-sm text-slate-400 mb-1">التقدير</span>
+                      <strong className={`text-2xl ${resultView.category === 'Perfect' ? 'text-purple-400' : resultView.category === 'Pass' ? 'text-emerald-400' : 'text-red-400'}`}>
+                         {resultView.category === 'Perfect' ? 'متفوق' : resultView.category === 'Pass' ? 'ناجح' : 'راسب'} ({resultView.letterGrade})
+                      </strong>
+                   </div>
+                </div>
 
-             <div className="bg-blue-900/20 p-4 rounded-xl border border-blue-800/50 mb-8 text-right">
-                <p className="text-blue-200 leading-relaxed">
-                   يرجى التزام الهدوء وإبلاغ الطالب التالي <strong className="text-blue-400">{handoverInfo?.nextStudent}</strong> للجلوس مكانك خلال 5 دقائق. رمز الدخول الخاص به هو:
-                </p>
-                <div className="text-center text-2xl font-mono font-bold text-emerald-400 tracking-widest mt-3">
-                   {handoverInfo?.nextCode}
-                </div>
+                {resultView.aiFeedback && (
+                   <div className="bg-blue-900/20 p-5 rounded-2xl border border-blue-800/50 mb-6">
+                      <h3 className="text-blue-400 font-bold mb-2 flex items-center gap-2"><CheckCircle2 size={18} /> تعليق المعلم الذكي</h3>
+                      <p className="text-blue-100 leading-relaxed text-lg">{resultView.aiFeedback}</p>
+                   </div>
+                )}
+
+                {resultView.mistakes && resultView.mistakes.length > 0 && (
+                   <div className="mt-8">
+                      <h3 className="text-xl font-bold text-slate-200 mb-4 border-b border-slate-700 pb-2">سجل الأخطاء للتعلم ({resultView.mistakes.length})</h3>
+                      <div className="space-y-4">
+                         {resultView.mistakes.map((m: any, idx: number) => (
+                            <div key={idx} className="bg-slate-800 p-4 rounded-xl border border-slate-700">
+                               <p className="text-slate-300 font-bold mb-3"><span className="text-red-400">سؤال:</span> {m.questionText}</p>
+                               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3 text-sm">
+                                  <div className="bg-red-900/20 p-3 rounded-lg border border-red-900/50">
+                                     <p className="text-red-400 mb-1">إجابتك (خاطئة):</p>
+                                     <p className="text-white font-bold">{m.studentAnswer || '(فارغ)'}</p>
+                                  </div>
+                                  <div className="bg-emerald-900/20 p-3 rounded-lg border border-emerald-900/50">
+                                     <p className="text-emerald-400 mb-1">الإجابة الصحيحة:</p>
+                                     <p className="text-white font-bold">{m.correctAnswer}</p>
+                                  </div>
+                               </div>
+                               <div className="bg-amber-900/10 p-3 rounded-lg border border-amber-900/30">
+                                  <p className="text-amber-500 text-xs mb-1">تبرير التصحيح التلقائي:</p>
+                                  <p className="text-amber-200/80 text-sm">{m.explanation}</p>
+                               </div>
+                            </div>
+                         ))}
+                      </div>
+                   </div>
+                )}
              </div>
-             
-             <div className="text-slate-500 text-sm flex items-center justify-center gap-2">
-               <Loader2 className="animate-spin" size={16} /> العودة للشاشة الرئيسية خلال {handoverCountdown} ثانية...
-             </div>
-          </div>
+          )}
        </div>
      );
   }
@@ -337,6 +405,7 @@ export default function StudentRoom({ studentData, onExit }: { studentData: any,
   if (status === 'waiting') {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 relative">
+        {wipeoutOverlay}
         <button onClick={onExit} className="absolute top-4 right-4 text-slate-500 hover:text-white p-2">
           <LogOut size={24} />
         </button>
@@ -390,6 +459,7 @@ export default function StudentRoom({ studentData, onExit }: { studentData: any,
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col">
+      {wipeoutOverlay}
       {/* Top Status Bar */}
       <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 p-4 sticky top-0 z-20 shadow-sm flex flex-col gap-3">
          <div className="flex justify-between items-center">

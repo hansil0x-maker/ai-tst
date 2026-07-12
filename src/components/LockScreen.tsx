@@ -31,7 +31,17 @@ export default function LockScreen({
     if (activeTab === "student" && studentMode === "register") {
       fetch('/api/sessions')
         .then(res => res.json())
-        .then(data => setAvailableSessions(data))
+        .then(data => {
+            const activeOnly = data.filter((s: any) => s.status === 'active');
+            // Sort by latest created just to be extra sure the top one is the latest
+            activeOnly.sort((a: any, b: any) => b.createdAt - a.createdAt);
+            setAvailableSessions(activeOnly);
+            if (activeOnly.length === 1) {
+                setSelectedSessionToken(activeOnly[0].token);
+            } else if (activeOnly.length === 0) {
+                setSelectedSessionToken("");
+            }
+        })
         .catch(err => console.error(err));
     }
   }, [activeTab, studentMode]);
@@ -162,7 +172,44 @@ export default function LockScreen({
     }
   };
 
+  const [isWanOnline, setIsWanOnline] = useState<boolean>(navigator.onLine);
+  const [isLanOnline, setIsLanOnline] = useState<boolean>(true);
+
+  useEffect(() => {
+    const handleOnline = () => setIsWanOnline(true);
+    const handleOffline = () => setIsWanOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    const checkLan = async () => {
+      try {
+         const controller = new AbortController();
+         const timeoutId = setTimeout(() => controller.abort(), 3000);
+         const res = await fetch('/api/sessions', { signal: controller.signal, cache: 'no-store' });
+         clearTimeout(timeoutId);
+         if (res.ok) {
+            setIsLanOnline(true);
+         } else {
+            setIsLanOnline(false);
+         }
+      } catch (err) {
+         setIsLanOnline(false);
+      }
+    };
+
+    checkLan();
+    const lanInterval = setInterval(checkLan, 5000);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      clearInterval(lanInterval);
+    };
+  }, []);
+
   if (resultData) {
+
     return (
       <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-4">
          <div className="bg-slate-800 p-8 rounded-2xl max-w-md w-full border border-slate-700 text-center relative overflow-hidden">
@@ -197,6 +244,23 @@ export default function LockScreen({
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-4">
+      {/* Network Status Indicator */}
+      <div className="fixed top-0 left-0 right-0 flex justify-center p-2 z-50 pointer-events-none">
+        <div className="bg-slate-900/80 backdrop-blur-md border border-slate-700/50 rounded-full px-4 py-2 flex items-center gap-4 shadow-xl">
+           <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-400 font-bold">الشبكة المحلية (LAN):</span>
+              <div className={`w-3 h-3 rounded-full ${isLanOnline ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)] animate-pulse'}`}></div>
+              <span className={`text-xs font-bold ${isLanOnline ? 'text-emerald-400' : 'text-red-400'}`}>{isLanOnline ? 'متصل' : 'مقطوع'}</span>
+           </div>
+           <div className="w-px h-4 bg-slate-700"></div>
+           <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-400 font-bold">الإنترنت الخارجي:</span>
+              <div className={`w-3 h-3 rounded-full ${isWanOnline ? 'bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)]' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)] animate-pulse'}`}></div>
+              <span className={`text-xs font-bold ${isWanOnline ? 'text-blue-400' : 'text-red-400'}`}>{isWanOnline ? 'متصل' : 'مقطوع'}</span>
+           </div>
+        </div>
+      </div>
+
       <div className="max-w-md w-full bg-slate-800 p-1 rounded-xl mb-6 flex">
         <button 
           onClick={() => { setActiveTab("teacher"); setError(""); }}
@@ -279,16 +343,23 @@ export default function LockScreen({
                   className="w-full bg-slate-900 border border-slate-700 rounded-xl p-4 text-right text-lg text-white focus:ring-2 focus:ring-purple-500 outline-none mb-3"
                 />
 
-                <select
-                  value={selectedSessionToken}
-                  onChange={(e) => setSelectedSessionToken(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl p-4 text-right text-lg text-slate-300 focus:ring-2 focus:ring-purple-500 outline-none mb-3 appearance-none"
-                >
-                  <option value="">-- اختر الجلسة المتاحة --</option>
-                  {availableSessions.map(s => (
-                     <option key={s.token} value={s.token}>{s.className} - {s.examTitle}</option>
-                  ))}
-                </select>
+                {availableSessions.length === 1 ? (
+                  <div className="w-full bg-emerald-900/20 border border-emerald-500/50 rounded-xl p-4 text-center mb-3">
+                     <p className="text-emerald-400 font-bold mb-1">جلسة الامتحان الحالية</p>
+                     <p className="text-white text-lg">{availableSessions[0].className} - {availableSessions[0].examTitle}</p>
+                  </div>
+                ) : (
+                  <select
+                    value={selectedSessionToken}
+                    onChange={(e) => setSelectedSessionToken(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl p-4 text-right text-lg text-slate-300 focus:ring-2 focus:ring-purple-500 outline-none mb-3 appearance-none"
+                  >
+                    <option value="">-- اختر الجلسة المتاحة --</option>
+                    {availableSessions.map(s => (
+                       <option key={s.token} value={s.token}>{s.className} - {s.examTitle}</option>
+                    ))}
+                  </select>
+                )}
 
                 {error && <p className="text-red-400 text-sm">{error}</p>}
 

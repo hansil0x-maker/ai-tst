@@ -193,9 +193,16 @@ export default function LiveExamDashboard() {
     });
   };
 
+  const handleEndSession = () => {
+    if (sessionToken && socket) {
+      socket.emit('end_session', { token: sessionToken });
+    }
+    setSessionToken(null);
+  };
+
   const handleNextBatch = () => {
     setCurrentBatchIndex(prev => prev + 1);
-    setSessionToken(null);
+    handleEndSession();
     setTimeout(() => {
       handleCreateSessionDirect();
     }, 100); // slight delay to allow state reset
@@ -362,20 +369,48 @@ export default function LiveExamDashboard() {
           const percentage = Math.round((er.preScore / exam.totalMarks) * 100);
           let category = 'Pass';
           let letterGrade = 'C';
-          if (percentage >= 90) { category = 'Perfect'; letterGrade = 'A'; }
-          else if (percentage >= 75) { category = 'Pass'; letterGrade = 'B'; }
-          else if (percentage >= 50) { category = 'Pass'; letterGrade = 'C'; }
-          else { category = 'Fail'; letterGrade = 'F'; }
+          let verbalGrade = 'جيد';
+          if (percentage >= 90) { category = 'Perfect'; letterGrade = 'A'; verbalGrade = 'امتياز'; }
+          else if (percentage >= 80) { category = 'Pass'; letterGrade = 'B'; verbalGrade = 'جيد جداً'; }
+          else if (percentage >= 65) { category = 'Pass'; letterGrade = 'C'; verbalGrade = 'جيد'; }
+          else if (percentage >= 50) { category = 'Pass'; letterGrade = 'D'; verbalGrade = 'مقبول'; }
+          else { category = 'Fail'; letterGrade = 'F'; verbalGrade = 'ضعيف'; }
+          
+          let academicStatus = 'ناجح';
+          if (percentage >= 90) academicStatus = 'متفوق';
+          else if (percentage >= 50 && percentage < 65) academicStatus = 'مكمل';
+          else if (percentage < 50) academicStatus = 'راسب';
 
           const hasReview = Object.values(er.evaluatedAnswers).some((ans: any) => ans.needsReview);
+
+          const mistakes: any[] = [];
+          exam.questions.forEach((q: any) => {
+             const ans = er.evaluatedAnswers[q.id];
+             if (ans && !ans.isCorrect && !ans.needsReview) {
+                mistakes.push({
+                   questionText: q.text,
+                   studentAnswer: ans.studentAnswer,
+                   correctAnswer: q.options ? q.options.find((o: any) => o.isCorrect)?.text : q.correctAnswer,
+                   explanation: ans.explanation || 'غير متطابق مع نموذج الإجابة'
+                });
+             }
+          });
+
+          const aiFeedbackBase = percentage >= 90 ? 'أداء مبهر! واصل هذا التفوق.' :
+                                 percentage >= 75 ? 'مستوى جيد جداً، انتبه لبعض الأخطاء البسيطة.' :
+                                 percentage >= 50 ? 'لقد نجحت، ولكن تحتاج إلى مراجعة شاملة للأسئلة التي أخطأت فيها.' :
+                                 'لا تستسلم، راجع سجل أخطائك وركز على نقاط ضعفك.';
 
           const finalSub = {
              studentName: er.studentName,
              score: er.preScore,
              percentage,
-             category: category as any,
+             category,
+             verbalGrade,
+             academicStatus,
              letterGrade,
-             aiFeedback: hasReview ? 'توجد إجابات تحتاج إلى مراجعة يدوية' : 'تم التصحيح الذكي',
+             mistakes,
+             aiFeedback: hasReview ? 'توجد إجابات تحتاج إلى مراجعة يدوية' : aiFeedbackBase,
              evaluatedAnswers: er.evaluatedAnswers,
              needsReview: hasReview
           };
@@ -559,7 +594,7 @@ export default function LiveExamDashboard() {
                  <span>أكواد الدخول للطلاب (الدفعة {currentBatchIndex + 1})</span>
                  <div className="flex gap-2">
                    <button onClick={handleNextBatch} className="text-sm bg-blue-900/50 text-blue-400 px-3 py-1 rounded hover:bg-blue-900 transition-colors">الجلسة التالية</button>
-                   <button onClick={() => setSessionToken(null)} className="text-sm bg-red-900/50 text-red-400 px-3 py-1 rounded hover:bg-red-900 transition-colors">إنهاء كلي</button>
+                   <button onClick={handleEndSession} className="text-sm bg-red-900/50 text-red-400 px-3 py-1 rounded hover:bg-red-900 transition-colors">إنهاء كلي</button>
                  </div>
                </h3>
                
@@ -701,9 +736,10 @@ export default function LiveExamDashboard() {
                       ))}
                     </div>
                     
-                    <div className="flex gap-4">
-                       <button
-                         onClick={() => {
+                    <div className="flex flex-col gap-4">
+                       <div className="flex gap-4">
+                          <button
+                            onClick={() => {
                             const pendingResults = JSON.parse(localStorage.getItem('nexus_pending_results') || '{}');
                             const resultsList = gradedResults.map(gr => ({
                                accessToken: pendingResults[gr.studentName],
@@ -715,7 +751,7 @@ export default function LiveExamDashboard() {
                          }}
                          className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl transition-colors"
                        >
-                         نشر النتائج للأجهزة
+                         نشر النتائج (الخيار أ)
                        </button>
                        
                        <button
@@ -747,6 +783,8 @@ export default function LiveExamDashboard() {
                        >
                          تحليل النتائج الذكي
                        </button>
+                    </div>
+                    <button onClick={handleNextBatch} className="w-full bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold py-3 rounded-xl transition-colors mt-2 border border-slate-600">بدء الجلسة التالية وإخفاء النتائج (الخيار ب)</button>
                     </div>
                     
                     {aiReport && (

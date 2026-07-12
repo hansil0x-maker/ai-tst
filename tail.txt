@@ -1,0 +1,113 @@
+{gradedResults.length === 0 ? (
+                  <button
+                    onClick={handleSmartGrading}
+                    className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-4 rounded-xl transition-colors flex justify-center items-center gap-2"
+                  >
+                    تصحيح الإجابات بالذكاء الاصطناعي ✨
+                  </button>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {gradedResults.map((gr, i) => (
+                        <div key={i} className="bg-slate-800 p-4 rounded-xl border border-slate-600">
+                           <div className="flex justify-between items-center mb-2">
+                             <span className="font-bold text-white">{gr.studentName}</span>
+                             <span className={`px-2 py-1 rounded text-xs font-bold ${gr.category === 'ناجح' ? 'bg-emerald-900 text-emerald-400' : gr.category === 'مكمل' ? 'bg-amber-900 text-amber-400' : 'bg-red-900 text-red-400'}`}>{gr.category}</span>
+                           </div>
+                           <div className="text-slate-300 mb-2">الدرجة: {gr.score} ({Math.round(gr.percentage)}%)</div>
+                           <p className="text-xs text-slate-400">{gr.aiFeedback}</p>
+                        </div>
+                      ))}
+                    </div>
+                    
+                    <div className="flex flex-col gap-4">
+                       <div className="flex flex-col gap-4"><div className="flex gap-4">
+                          <button
+                            onClick={() => {
+                            const pendingResults = JSON.parse(localStorage.getItem('nexus_pending_results') || '{}');
+                            const resultsList = gradedResults.map(gr => ({
+                               accessToken: pendingResults[gr.studentName],
+                               resultData: gr
+                            })).filter(r => r.accessToken);
+                            
+                            socket?.emit('deliver_results', { token: sessionToken, resultsList });
+                            toast.success('تم بث النتائج لجميع الأجهزة!');
+                         }}
+                         className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl transition-colors"
+                       >
+                         نشر النتائج (الخيار أ)
+                       </button>
+                       
+                       <button
+                         onClick={async () => {
+                            const toastId = toast.loading('جاري توليد التقرير...');
+                            try {
+                              const exam = exams?.find(e => e.id === selectedExamId);
+                              const res = await fetch('/api/generate-exam-report', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ exam, results: gradedResults })
+                              });
+                              const data = await res.json();
+                              if (!res.ok) throw new Error(data.error);
+                              setAiReport(data);
+                              toast.success('تم توليد التقرير', { id: toastId });
+                              
+                              await db.aiReports.add({
+                                examId: selectedExamId,
+                                createdAt: Date.now(),
+                                type: 'post_exam',
+                                reportData: data
+                              });
+                            } catch (e: any) {
+                              toast.error('خطأ: ' + e.message, { id: toastId });
+                            }
+                         }}
+                         className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-colors"
+                       >
+                         تحليل النتائج الذكي
+                       </button>
+                    </div>
+                    <button onClick={handleNextBatch} className="w-full bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold py-3 rounded-xl transition-colors mt-2 border border-slate-600">بدء الجلسة التالية وإخفاء النتائج (الخيار ب)</button>
+                    </div>
+                    
+                    {aiReport && (
+                       <div className="bg-slate-900 p-6 rounded-2xl border border-purple-500 shadow-xl shadow-purple-900/20 mt-6">
+                         <h2 className="text-xl font-bold text-white mb-4 text-center">تقرير الذكاء الاصطناعي</h2>
+                         <div className="grid grid-cols-2 gap-4 mb-4">
+                            <div className="bg-slate-800 p-3 rounded-lg border border-emerald-900/50">
+                               <p className="text-emerald-400 font-bold mb-2">أفضل 5 طلاب</p>
+                               <ul className="list-disc list-inside text-sm text-slate-300">
+                                 {aiReport.top5?.map((s: string, i: number) => <li key={i}>{s}</li>)}
+                               </ul>
+                            </div>
+                            <div className="bg-slate-800 p-3 rounded-lg border border-red-900/50">
+                               <p className="text-red-400 font-bold mb-2">يحتاجون دعماً</p>
+                               <ul className="list-disc list-inside text-sm text-slate-300">
+                                 {aiReport.bottom5?.map((s: string, i: number) => <li key={i}>{s}</li>)}
+                               </ul>
+                            </div>
+                         </div>
+                         <div className="bg-slate-800 p-4 rounded-lg mb-4">
+                            <p className="text-amber-400 font-bold mb-1">أضعف موضوع:</p>
+                            <p className="text-slate-300 text-sm">{aiReport.weakestTopic}</p>
+                         </div>
+                         <div className="bg-slate-800 p-4 rounded-lg">
+                            <p className="text-blue-400 font-bold mb-1">توصيات عامة:</p>
+                            <p className="text-slate-300 text-sm leading-relaxed">{aiReport.reportText}</p>
+                         </div>
+                       </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+

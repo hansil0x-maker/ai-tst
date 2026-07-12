@@ -20,7 +20,9 @@ async function startServer() {
     const sessions = Array.from(activeSessions.entries()).map(([token, session]: any) => ({
       token,
       examTitle: session.examTitle || 'امتحان مباشر',
-      className: session.className || 'جلسة غير معروفة'
+      className: session.className || 'جلسة غير معروفة',
+      status: session.status || 'active',
+      createdAt: session.createdAt || Date.now()
     }));
     res.json(sessions);
   });
@@ -62,12 +64,30 @@ async function startServer() {
 
     // Teacher creates a new exam session
     socket.on('create_session', (data, callback) => {
+      // Clear any previous sessions belonging to this same teacher to prevent ghosts
+      for (const [existingToken, existingSession] of activeSessions.entries()) {
+         if (existingSession.teacherId === socket.id) {
+            activeSessions.delete(existingToken);
+            submissionQueues.delete(existingToken);
+         }
+      }
+
       const { examTitle, className } = data || {};
       const token = Math.floor(100000 + Math.random() * 900000).toString();
-      activeSessions.set(token, { teacherId: socket.id, otps: {}, students: [], examTitle, className });
+      activeSessions.set(token, { teacherId: socket.id, otps: {}, students: [], examTitle, className, status: 'active', createdAt: Date.now() });
       socket.join(token);
       console.log(`Teacher created session ${token} for ${className} - ${examTitle}`);
       if (callback) callback({ success: true, token });
+    });
+
+    // Explicitly end a session
+    socket.on('end_session', (data) => {
+      if (data && data.token) {
+        socket.to(data.token).emit('session_closed');
+        activeSessions.delete(data.token);
+        submissionQueues.delete(data.token);
+        console.log(`Session ${data.token} explicitly closed by teacher`);
+      }
     });
 
     // Student asks to register for a session
