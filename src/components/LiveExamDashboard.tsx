@@ -264,6 +264,150 @@ export default function LiveExamDashboard() {
     toast.success('تم إرسال الامتحان للطلاب وتم بدء المؤقت');
   };
 
+  const handleSmartGrading = async () => {
+    const toastId = toast.loading('جاري التصحيح الذكي للإجابات...');
+    try {
+      const exam = exams?.find(e => e.id === selectedExamId);
+      if (!exam) throw new Error('Exam not found');
+      
+      const glossary = await db.glossary.where('examId').equals(selectedExamId).toArray();
+      const glossaryMap = new Map();
+      glossary.forEach(g => glossaryMap.set(`${g.questionId}_${g.normalizedAnswer}`, g.isCorrect));
+
+      const answersToGrade: any[] = [];
+      const evaluatedResults: any[] = [];
+
+      submissions.forEach(sub => {
+         const evaluatedAnswers: Record<number, any> = {};
+         let preScore = 0;
+         
+         exam.questions.forEach((q: any) => {
+            const stAns = sub.answers[q.id] || '';
+            const isExactMatchTypes = ['mcq', 'tf', 'true_false'];
+            
+            if (isExactMatchTypes.includes(q.type)) {
+               const isCorrect = stAns === q.correctAnswer;
+               evaluatedAnswers[q.id] = { studentAnswer: stAns, isCorrect, confidenceScore: isCorrect ? 100 : 0 };
+               if (isCorrect) preScore++;
+            } else {
+               const normalized = stAns.trim().toLowerCase();
+               const glossKey = `${q.id}_${normalized}`;
+               if (glossaryMap.has(glossKey)) {
+                  const isCorrect = glossaryMap.get(glossKey);
+                  evaluatedAnswers[q.id] = { studentAnswer: stAns, isCorrect, confidenceScore: 100, explanation: 'معتمد مسبقاً من قاموس الإجابات' };
+                  if (isCorrect) preScore++;
+               } else if (!stAns.trim()) {
+                  evaluatedAnswers[q.id] = { studentAnswer: stAns, isCorrect: false, confidenceScore: 0, explanation: 'إجابة فارغة' };
+               } else {
+                  answersToGrade.push({
+                     evalId: `${sub.student.name}_${q.id}`,
+                     studentName: sub.student.name,
+                     questionId: q.id,
+                     studentAnswer: stAns,
+                     expectedAnswer: q.correctAnswer,
+                     explanation: q.explanation || ''
+                  });
+                  evaluatedAnswers[q.id] = { studentAnswer: stAns, isCorrect: false, needsReview: true };
+               }
+            }
+         });
+         
+         evaluatedResults.push({
+            studentName: sub.student.name,
+            studentId: sub.student.id,
+            scannedAnswers: sub.answers,
+            evaluatedAnswers,
+            preScore
+         });
+      });
+
+      if (answersToGrade.length > 0) {
+          const res = await fetch('/api/grade-digital-submissions', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ answersToGrade })
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error);
+
+          const evals = data.evaluations || [];
+          const evalMap = new Map();
+          evals.forEach((e: any) => evalMap.set(e.evaluationId, e));
+
+          evaluatedResults.forEach(er => {
+              exam.questions.forEach((q: any) => {
+                  const evId = `${er.studentName}_${q.id}`;
+                  if (evalMap.has(evId)) {
+                      const aiEv = evalMap.get(evId);
+                      const isCorrect = aiEv.grade === 'correct';
+                      const needsReview = aiEv.grade === 'review';
+                      
+                      er.evaluatedAnswers[q.id] = {
+                         studentAnswer: er.evaluatedAnswers[q.id].studentAnswer,
+                         isCorrect,
+                         confidenceScore: aiEv.confidenceScore,
+                         explanation: aiEv.explanation,
+                         needsReview
+                      };
+                      if (isCorrect) er.preScore++;
+                  }
+              });
+          });
+      }
+
+      const finalGradedSubmissions: any[] = [];
+      const pendingResults = JSON.parse(localStorage.getItem('nexus_pending_results') || '{}');
+
+      for (const er of evaluatedResults) {
+          const percentage = Math.round((er.preScore / exam.totalMarks) * 100);
+          let category = 'Pass';
+          let letterGrade = 'C';
+          if (percentage >= 90) { category = 'Perfect'; letterGrade = 'A'; }
+          else if (percentage >= 75) { category = 'Pass'; letterGrade = 'B'; }
+          else if (percentage >= 50) { category = 'Pass'; letterGrade = 'C'; }
+          else { category = 'Fail'; letterGrade = 'F'; }
+
+          const hasReview = Object.values(er.evaluatedAnswers).some((ans: any) => ans.needsReview);
+
+          const finalSub = {
+             studentName: er.studentName,
+             score: er.preScore,
+             percentage,
+             category: category as any,
+             letterGrade,
+             aiFeedback: hasReview ? 'توجد إجابات تحتاج إلى مراجعة يدوية' : 'تم التصحيح الذكي',
+             evaluatedAnswers: er.evaluatedAnswers,
+             needsReview: hasReview
+          };
+          finalGradedSubmissions.push(finalSub);
+
+          const accessToken = pendingResults[er.studentName] || Math.floor(1000 + Math.random() * 9000).toString();
+          
+          await db.results.add({
+             examId: selectedExamId,
+             studentId: er.studentId,
+             studentName: er.studentName,
+             scannedAnswers: er.scannedAnswers,
+             evaluatedAnswers: er.evaluatedAnswers,
+             score: er.preScore,
+             percentage,
+             category: category as any,
+             isCheatSuspected: false,
+             needsGrading: hasReview
+          });
+          
+          pendingResults[er.studentName] = accessToken;
+      }
+      
+      localStorage.setItem('nexus_pending_results', JSON.stringify(pendingResults));
+      setGradedResults(finalGradedSubmissions);
+      toast.success('تم التصحيح بنجاح!', { id: toastId });
+
+    } catch (e: any) {
+      toast.error(e.message || 'حدث خطأ أثناء التصحيح', { id: toastId });
+    }
+  };
+
   // Lock-step condition
   const canStart = students.length > 0;
 
@@ -537,48 +681,7 @@ export default function LiveExamDashboard() {
                 
                 {gradedResults.length === 0 ? (
                   <button
-                    onClick={async () => {
-                      const toastId = toast.loading('جاري التصحيح الذكي للإجابات...');
-                      try {
-                        const exam = exams?.find(e => e.id === selectedExamId);
-                        const res = await fetch('/api/grade-digital-submissions', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ exam, submissions })
-                        });
-                        const data = await res.json();
-                        if (!res.ok) throw new Error(data.error);
-                        
-                        setGradedResults(data.gradedSubmissions);
-                        toast.success('تم التصحيح بنجاح!', { id: toastId });
-                        
-                        // Link with pending access tokens from localStorage
-                        const pendingResults = JSON.parse(localStorage.getItem('nexus_pending_results') || '{}');
-                        
-                        for (const graded of data.gradedSubmissions) {
-                           const matchSub = submissions.find(s => s.student.name === graded.studentName);
-                           const stId = matchSub ? matchSub.student.id : null;
-                           const accessToken = pendingResults[graded.studentName] || Math.floor(1000 + Math.random() * 9000).toString();
-                           
-                           await db.results.add({
-                              examId: selectedExamId,
-                              studentId: stId,
-                              studentName: graded.studentName,
-                              scannedAnswers: matchSub ? matchSub.answers : {},
-                              score: graded.score,
-                              percentage: graded.percentage,
-                              category: graded.category,
-                              letterGrade: graded.letterGrade,
-                              aiFeedback: graded.aiFeedback,
-                              isCheatSuspected: false
-                           });
-                        }
-                        
-                        toast.success('تم حفظ النتائج في قاعدة البيانات');
-                      } catch (e: any) {
-                        toast.error('فشل التصحيح: ' + e.message, { id: toastId });
-                      }
-                    }}
+                    onClick={handleSmartGrading}
                     className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-4 rounded-xl transition-colors flex justify-center items-center gap-2"
                   >
                     تصحيح الإجابات بالذكاء الاصطناعي ✨

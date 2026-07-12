@@ -18,6 +18,7 @@ import toast from "react-hot-toast";
 export default function Exams() {
   const [isCreating, setIsCreating] = useState(false);
   const [viewExam, setViewExam] = useState<any>(null);
+  const [reviewExam, setReviewExam] = useState<any>(null);
   const [visibleCount, setVisibleCount] = useState(5);
   const [filterClass, setFilterClass] = useState<number>(0);
   const [filterDay, setFilterDay] = useState<string>("All");
@@ -352,7 +353,17 @@ export default function Exams() {
                if (examResults.length > 0) {
                  return (
                    <div className="mt-8 pt-6 border-t border-slate-700">
-                     <h4 className="text-xl font-bold text-white mb-4">نتائج الطلاب ({examResults.length})</h4>
+                     <div className="flex justify-between items-center mb-4">
+                       <h4 className="text-xl font-bold text-white">نتائج الطلاب ({examResults.length})</h4>
+                       {examResults.some(r => r.needsGrading) && (
+                         <button
+                           onClick={() => setReviewExam(viewExam)}
+                           className="bg-amber-600 hover:bg-amber-500 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center gap-2"
+                         >
+                           ⚠️ مراجعة الإجابات المعلقة
+                         </button>
+                       )}
+                     </div>
                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         {examResults.map(r => (
                            <div key={r.id} className="bg-slate-800 p-3 rounded-xl border border-slate-700 flex justify-between items-center">
@@ -384,6 +395,138 @@ export default function Exams() {
               >
                 إغلاق
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {reviewExam && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-slate-900 border border-amber-700/50 w-full max-w-4xl rounded-2xl p-6 relative max-h-[90vh] flex flex-col">
+            <button
+              onClick={() => setReviewExam(null)}
+              className="absolute top-4 left-4 p-2 bg-slate-800 hover:bg-slate-700 rounded-full transition-colors text-white"
+            >
+              <X size={20} />
+            </button>
+            <h3 className="text-2xl font-bold text-amber-400 mb-2 ml-10 flex items-center gap-2" dir="auto">
+              ⚠️ مراجعة الإجابات المعلقة
+            </h3>
+            <p className="text-slate-400 mb-6 border-b border-slate-800 pb-4">
+              تحتاج بعض إجابات الطلاب للتقييم اليدوي لأن نسبة الثقة في التصحيح التلقائي كانت متوسطة.
+            </p>
+
+            <div className="flex-1 overflow-y-auto space-y-6 pr-2">
+              {results.filter(r => r.examId === reviewExam.id && r.needsGrading).map(r => {
+                const pendingAnswers = Object.entries(r.evaluatedAnswers || {}).filter(([_, ans]: any) => ans.needsReview);
+                if (pendingAnswers.length === 0) return null;
+
+                return (
+                  <div key={r.id} className="bg-slate-800/50 rounded-xl p-4 border border-slate-700">
+                    <h4 className="font-bold text-white mb-4 text-lg border-b border-slate-700 pb-2">الطالب: {r.studentName}</h4>
+                    <div className="space-y-4">
+                      {pendingAnswers.map(([qIdStr, ans]: any) => {
+                         const qId = Number(qIdStr);
+                         const question = reviewExam.questions.find((q: any) => q.id === qId);
+                         return (
+                            <div key={qId} className="bg-slate-900 p-4 rounded-lg border border-slate-600">
+                               <p className="text-slate-300 font-medium mb-3" dir="auto"><span className="text-blue-400">سؤال:</span> {question?.text}</p>
+                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                  <div className="bg-slate-800 p-3 rounded border border-slate-700">
+                                     <p className="text-xs text-slate-400 mb-1">إجابة الطالب:</p>
+                                     <p className="text-white font-bold" dir="auto">{ans.studentAnswer || '(فارغ)'}</p>
+                                  </div>
+                                  <div className="bg-emerald-900/20 p-3 rounded border border-emerald-900/50">
+                                     <p className="text-xs text-emerald-500 mb-1">الإجابة النموذجية:</p>
+                                     <p className="text-emerald-400 font-bold" dir="auto">{question?.correctAnswer}</p>
+                                  </div>
+                               </div>
+                               
+                               <div className="bg-amber-900/10 p-3 rounded border border-amber-900/30 mb-4">
+                                  <p className="text-xs text-amber-500 mb-1 flex justify-between">
+                                    <span>تبرير الذكاء الاصطناعي:</span>
+                                    <span>الثقة: {ans.confidenceScore}%</span>
+                                  </p>
+                                  <p className="text-amber-200/80 text-sm" dir="auto">{ans.explanation}</p>
+                               </div>
+
+                               <div className="flex gap-3">
+                                  <button
+                                     onClick={async () => {
+                                        const newEvaluated = { ...r.evaluatedAnswers };
+                                        newEvaluated[qId] = { ...ans, isCorrect: true, needsReview: false, explanation: 'تم الاعتماد يدوياً' };
+                                        
+                                        const newScore = r.score + 1;
+                                        const percentage = Math.round((newScore / reviewExam.totalMarks) * 100);
+                                        let category = 'Pass';
+                                        let letterGrade = 'C';
+                                        if (percentage >= 90) { category = 'Perfect'; letterGrade = 'A'; }
+                                        else if (percentage >= 75) { category = 'Pass'; letterGrade = 'B'; }
+                                        else if (percentage >= 50) { category = 'Pass'; letterGrade = 'C'; }
+                                        else { category = 'Fail'; letterGrade = 'F'; }
+
+                                        const stillNeedsReview = Object.values(newEvaluated).some((a: any) => a.needsReview);
+
+                                        await db.results.update(r.id!, {
+                                           evaluatedAnswers: newEvaluated,
+                                           score: newScore,
+                                           percentage,
+                                           category: category as any,
+                                           letterGrade,
+                                           needsGrading: stillNeedsReview
+                                        });
+
+                                        await db.glossary.add({
+                                           examId: reviewExam.id,
+                                           questionId: qId,
+                                           normalizedAnswer: ans.studentAnswer.trim().toLowerCase(),
+                                           isCorrect: true
+                                        });
+                                        toast.success('تم اعتماد الإجابة وتحديث قاموس التقييم');
+                                     }}
+                                     className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-lg font-bold transition-colors"
+                                  >
+                                     ✅ اعتماد كإجابة صحيحة
+                                  </button>
+                                  <button
+                                     onClick={async () => {
+                                        const newEvaluated = { ...r.evaluatedAnswers };
+                                        newEvaluated[qId] = { ...ans, isCorrect: false, needsReview: false, explanation: 'تم الرفض يدوياً' };
+                                        
+                                        const stillNeedsReview = Object.values(newEvaluated).some((a: any) => a.needsReview);
+
+                                        await db.results.update(r.id!, {
+                                           evaluatedAnswers: newEvaluated,
+                                           needsGrading: stillNeedsReview
+                                        });
+
+                                        await db.glossary.add({
+                                           examId: reviewExam.id,
+                                           questionId: qId,
+                                           normalizedAnswer: ans.studentAnswer.trim().toLowerCase(),
+                                           isCorrect: false
+                                        });
+                                        toast.success('تم رفض الإجابة');
+                                     }}
+                                     className="flex-1 bg-red-600 hover:bg-red-500 text-white py-2 rounded-lg font-bold transition-colors"
+                                  >
+                                     ❌ رفض الإجابة (خاطئة)
+                                  </button>
+                               </div>
+                            </div>
+                         );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+              
+              {results.filter(r => r.examId === reviewExam.id && r.needsGrading).length === 0 && (
+                 <div className="text-center py-12">
+                    <CheckCircle className="mx-auto text-emerald-500 mb-4" size={48} />
+                    <p className="text-xl text-white font-bold">تمت مراجعة جميع الإجابات!</p>
+                 </div>
+              )}
             </div>
           </div>
         </div>

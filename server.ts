@@ -249,7 +249,7 @@ socket.on('submit_exam', (data) => {
 
     app.post('/api/generate-exam', async (req, res) => {
     try {
-      const { prompt, content, files, totalQuestions, autoDistribute, qTypes, enabledTypes, previousQuestions } = req.body;
+      const { prompt, content, files, totalQuestions, autoDistribute, qTypes, enabledTypes, previousQuestions, subject, grade, topic, difficulty, learningObjective, sourceType, sourceLink } = req.body;
       const apiKey = process.env.GROQ_API_KEY;
       
       if (!apiKey) {
@@ -266,6 +266,15 @@ socket.on('submit_exam', (data) => {
       };
 
       let configPrompt = `Target Total Questions: ${totalQuestions || 10}\n`;
+      configPrompt += `Subject: ${subject || 'Not specified'}\n`;
+      configPrompt += `Grade Level: ${grade || 'Not specified'}\n`;
+      configPrompt += `Topic/Unit: ${topic || 'Not specified'}\n`;
+      configPrompt += `Difficulty: ${difficulty || 'Medium'}\n`;
+      configPrompt += `Target Learning Objective (Cognitive Level): ${learningObjective || 'Not specified'}\n`;
+      if (sourceLink) {
+        configPrompt += `Source Link: ${sourceLink}\n`;
+      }
+      
       if (!autoDistribute && qTypes) {
         const lines = Object.entries(qTypes)
           .filter(([, count]) => (count as number) > 0)
@@ -290,15 +299,16 @@ DO NOT generate any questions that are similar to the following questions previo
 
       const ai = new OpenAI({ baseURL: 'https://api.groq.com/openai/v1', apiKey });
       
-            const fullPrompt = `You are an expert teacher. Generate a comprehensive exam based on the provided content or files. This exam will be delivered digitally via a local Wi-Fi PWA.
+            const fullPrompt = `You are an expert teacher. Generate a comprehensive exam based on the provided content or files. This exam will be delivered digitally via a local Wi-Fi PWA. Make sure to adhere to the requested subject, grade, topic, and difficulty.
 ${configPrompt}
 ${avoidPrompt}
-Text Content:
+Text Content / Chat History:
 ${content || 'None'}
 Notes from teacher: ${prompt || 'None'}
 CRITICAL INSTRUCTIONS FOR LLAMA 3.3 (FORMATTING & TEMPLATES):
 1. You MUST generate the exact types of questions requested above. Do NOT just generate "mcq".
-2. Please return ONLY a valid JSON object matching this structure:
+2. You MUST include an "explanation" (التبرير العلمي) for why the correct answer is correct, and a "skill" indicating the cognitive learning objective (e.g. فهم واستيعاب).
+3. Please return ONLY a valid JSON object matching this structure:
 {
    "questions": [
     {
@@ -306,25 +316,33 @@ CRITICAL INSTRUCTIONS FOR LLAMA 3.3 (FORMATTING & TEMPLATES):
       "type": "mcq",
       "text": "The multiple choice question text?",
       "options": { "A": "First option", "B": "Second option", "C": "Third option", "D": "Fourth option" },
-      "correctAnswer": "A"
+      "correctAnswer": "A",
+      "explanation": "Because A is the only option that satisfies the condition.",
+      "skill": "فهم واستيعاب"
     },
     {
       "id": 2,
       "type": "true_false",
       "text": "The true or false statement.",
-      "correctAnswer": "true"
+      "correctAnswer": "true",
+      "explanation": "Because the statement correctly identifies the fact.",
+      "skill": "تذكر وحفظ"
     },
     {
       "id": 3,
       "type": "fill_blanks",
       "text": "The capital of France is ______.",
-      "correctAnswer": "Paris"
+      "correctAnswer": "Paris",
+      "explanation": "Paris is the capital of France.",
+      "skill": "تذكر وحفظ"
     },
     {
       "id": 4,
       "type": "short_answer",
       "text": "Explain the water cycle briefly.",
-      "correctAnswer": "Evaporation, condensation, and precipitation."
+      "correctAnswer": "Evaporation, condensation, and precipitation.",
+      "explanation": "These are the main three stages of the water cycle.",
+      "skill": "تطبيق وتحليل"
     },
     {
       "id": 5,
@@ -333,14 +351,18 @@ CRITICAL INSTRUCTIONS FOR LLAMA 3.3 (FORMATTING & TEMPLATES):
       "matchingPairs": [
         { "left": "Apple", "right": "A fruit" },
         { "left": "Carrot", "right": "A vegetable" }
-      ]
+      ],
+      "explanation": "Apples are fruits, carrots are vegetables.",
+      "skill": "فهم واستيعاب"
     },
     {
       "id": 6,
       "type": "image_labeling",
       "text": "Label the parts of the plant diagram.",
       "imageDescription": "A diagram of a plant with roots, stem, leaves, and a flower.",
-      "correctAnswer": "1: Roots, 2: Stem, 3: Leaves, 4: Flower"
+      "correctAnswer": "1: Roots, 2: Stem, 3: Leaves, 4: Flower",
+      "explanation": "These are the correct names for the labeled parts.",
+      "skill": "فهم واستيعاب"
     }
   ],
    "aiComment": "A brief Arabic comment to the teacher regarding the generated exam's quality or coverage."
@@ -388,7 +410,7 @@ Make sure it is perfect JSON.`;
 
 app.post('/api/grade-digital-submissions', async (req, res) => {
   try {
-    const { exam, submissions } = req.body;
+    const { answersToGrade } = req.body;
     const apiKey = process.env.GROQ_API_KEY;
     if (!apiKey) {
       return res.status(500).json({ error: 'GROQ_API_KEY is missing' });
@@ -397,30 +419,33 @@ app.post('/api/grade-digital-submissions', async (req, res) => {
     const ai = new OpenAI({ baseURL: 'https://api.groq.com/openai/v1', apiKey });
     
     const prompt = `
-You are an expert teacher grading a digital exam. 
-Exam details: ${JSON.stringify(exam)}
+You are an expert educational AI performing Semantic Scoring.
+You will be given a list of student answers to evaluate.
+For each answer, you have the expected correct answer and the scientific explanation (التبرير العلمي).
 
-Here are the students' submissions:
-${JSON.stringify(submissions)}
+Evaluate the student's answer against the expected answer and explanation.
+Calculate a "confidenceScore" from 0 to 100 based on how well the student's answer captures the core concept.
+- If it's a perfect match or captures the full concept, score 85-100.
+- If it captures part of the concept or is ambiguous, score 40-84.
+- If it's completely wrong or irrelevant, score 0-39.
 
-Grade each submission according to the correct answers in the exam.
-If the question is multiple choice (mcq) or true_false, use exact matching.
-If the question is short_answer, fill_blanks, or others, use your AI capability to determine if the student's answer is correct, partially correct, or wrong.
-Assign a score out of the total marks for the exam (Total: ${exam.totalMarks}).
+Also provide a brief "explanation" (in Arabic) of why you gave this score.
 
-Respond ONLY in valid JSON format:
+Input Data:
+${JSON.stringify(answersToGrade, null, 2)}
+
+Respond ONLY in valid JSON format matching exactly this structure:
 {
-  "gradedSubmissions": [
+  "evaluations": [
     {
-      "studentName": "string",
-      "score": number,
-      "percentage": number,
-      "category": "متفوق" | "ناجح" | "مكمل" | "راسب",
-      "letterGrade": "A" | "B" | "C" | "D" | "F",
-      "aiFeedback": "Brief Arabic comment on the student's performance"
+      "evaluationId": "string (the exact evalId from input)",
+      "confidenceScore": 90,
+      "explanation": "string (your Arabic explanation of the evaluation)",
+      "grade": "correct"
     }
   ]
 }
+Note: "grade" must be "correct" if >85, "review" if 40-85, "incorrect" if <40.
 `;
 
     const response = await ai.chat.completions.create({
@@ -506,6 +531,44 @@ app.post('/api/generate-recommendation', async (req, res) => {
     } catch (error: any) {
        console.error("AI Recommendation Error:", error);
        res.status(500).json({ error: error.message || 'Error generating recommendation' });
+    }
+  });
+
+  app.post('/api/suggestions', async (req, res) => {
+    try {
+      const { subject, grade, topic, difficulty } = req.body;
+      const apiKey = process.env.GROQ_API_KEY;
+      if (!apiKey) {
+        return res.status(500).json({ error: 'GROQ_API_KEY is missing' });
+      }
+
+      const ai = new OpenAI({ baseURL: 'https://api.groq.com/openai/v1', apiKey });
+      const prompt = `You are an expert educational AI. 
+Provide 4 specific, short, creative, and highly relevant suggestions (in Arabic) for a teacher to use as "Additional Notes" when generating an exam.
+Context:
+Subject: ${subject || 'General'}
+Grade: ${grade || 'Not specified'}
+Topic: ${topic || 'Not specified'}
+Difficulty: ${difficulty || 'Medium'}
+
+The suggestions should tell the AI how to structure the questions or what to focus on (e.g. "Focus on real-world applications of [topic]", "Include tricky questions for gifted students", "Make the language very simple for [grade]").
+
+Return ONLY a JSON object with this format:
+{
+  "suggestions": ["sug1", "sug2", "sug3", "sug4"]
+}`;
+
+      const response = await ai.chat.completions.create({
+        model: 'llama-3.3-70b-versatile',
+        messages: [{ role: 'user', content: prompt }],
+        response_format: { type: 'json_object' }
+      });
+      
+      const rawText = response.choices[0]?.message?.content?.trim();
+      res.json(JSON.parse(rawText || '{"suggestions": []}'));
+    } catch (error: any) {
+       console.error("AI Suggestions Error:", error);
+       res.status(500).json({ error: error.message || 'Error generating suggestions' });
     }
   });
 

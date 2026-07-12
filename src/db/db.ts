@@ -43,12 +43,21 @@ export interface Exam {
   duplexQuestionPages?: number;
 }
 
+export interface EvaluatedAnswer {
+  studentAnswer: string;
+  isCorrect: boolean;
+  confidenceScore?: number;
+  explanation?: string;
+  needsReview?: boolean;
+}
+
 export interface Result {
   id?: number;
   examId: number;
   studentId: number | null;
   studentName?: string;
   scannedAnswers: Record<number, string>;
+  evaluatedAnswers?: Record<number, EvaluatedAnswer>;
   score: number;
   percentage: number;
   category: 'Pass' | 'Fail' | 'Perfect';
@@ -80,6 +89,14 @@ export interface AiReport {
   reportData: any; // JSON containing top5, bottom5, weak topic, text, etc.
 }
 
+export interface GlossaryEntry {
+  id?: number;
+  questionId: number;
+  examId: number;
+  normalizedAnswer: string;
+  isCorrect: boolean;
+}
+
 const db = new Dexie('ExamAppDB') as Dexie & {
   settings: EntityTable<Setting, 'id'>;
   classes: EntityTable<ClassEntity, 'id'>;
@@ -89,6 +106,7 @@ const db = new Dexie('ExamAppDB') as Dexie & {
   analyses: EntityTable<Analysis, 'id'>;
   examSessions: EntityTable<ExamSession, 'id'>;
   aiReports: EntityTable<AiReport, 'id'>;
+  glossary: EntityTable<GlossaryEntry, 'id'>;
 };
 
 db.version(1).stores({
@@ -121,6 +139,10 @@ db.version(4).stores({
 db.version(5).stores({
   examSessions: '++id, sessionToken, examId, batchNumber',
   aiReports: '++id, examId, type'
+});
+
+db.version(6).stores({
+  glossary: '++id, questionId, examId, normalizedAnswer, isCorrect'
 });
 
 export { db };

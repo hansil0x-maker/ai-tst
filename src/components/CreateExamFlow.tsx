@@ -15,8 +15,19 @@ export default function CreateExamFlow({ onCancel, onComplete }: { onCancel: () 
   
   const [step, setStep] = useState(1);
   
-  const [title, setTitle] = useState('');
-  const [classId, setClassId] = useState<number>(0);
+  const [grade, setGrade] = useState('الصف الأول');
+  const [topic, setTopic] = useState('');
+  const [difficulty, setDifficulty] = useState('متوسط');
+  const [learningObjective, setLearningObjective] = useState('فهم واستيعاب');
+  const [sourceType, setSourceType] = useState('text');
+  const [sourceLink, setSourceLink] = useState('');
+  const [aiSuggestions, setAiSuggestions] = useState<string[]>([
+    "أنشئ أسئلة تعتمد على الفهم والتطبيق وليس الحفظ",
+    "ركز على المفاهيم الرئيسية للدرس وتجنب التفاصيل الدقيقة",
+    "اجعل الأسئلة متدرجة الصعوبة لتقييم مستويات الطلاب",
+    "أضف أسئلة تحليلية تتطلب من الطالب التفكير النقدي"
+  ]);
+  const [isFetchingSuggestions, setIsFetchingSuggestions] = useState(false);
   const [subject, setSubject] = useState('');
   const [examDate, setExamDate] = useState(new Date().toISOString().split('T')[0]);
   const [notes, setNotes] = useState('');
@@ -102,9 +113,15 @@ export default function CreateExamFlow({ onCancel, onComplete }: { onCancel: () 
       return;
     }
     
-    if (!contentBlock && files.length === 0 && !notes) {
-      toast.error('الرجاء توفير محتوى، خطة منهج، أو كتابة ملاحظات لتوليد الامتحان.');
-      setErrorMsg('الرجاء توفير محتوى، خطة منهج، أو كتابة ملاحظات لتوليد الامتحان.');
+    if (!subject || !topic || classId === 0) {
+      toast.error('يرجى التأكد من ملء الحقول الإجبارية (المادة، الصف، عنوان الدرس).');
+      setErrorMsg('يرجى التأكد من ملء الحقول الإجبارية (المادة، الصف، عنوان الدرس).');
+      return;
+    }
+
+    if (!contentBlock && files.length === 0 && !notes && !sourceLink) {
+      toast.error('الرجاء توفير مصدر للامتحان (نص، ملف، رابط) أو ملاحظات.');
+      setErrorMsg('الرجاء توفير مصدر للامتحان (نص، ملف، رابط) أو ملاحظات.');
       return;
     }
     setErrorMsg('');
@@ -134,10 +151,28 @@ export default function CreateExamFlow({ onCancel, onComplete }: { onCancel: () 
             Object.entries(qTypes).filter(([k]) => enabledTypes[k as keyof typeof enabledTypes])
           );
 
+      const requestBody = { 
+          prompt: notes, 
+          content: contentBlock, 
+          files, 
+          totalQuestions, 
+          autoDistribute, 
+          qTypes: effectiveQTypes, 
+          enabledTypes, 
+          previousQuestions,
+          subject,
+          grade,
+          topic,
+          difficulty,
+          learningObjective,
+          sourceType,
+          sourceLink
+      };
+
       const res = await fetch('/api/generate-exam', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: notes, content: contentBlock, files, totalQuestions, autoDistribute, qTypes: effectiveQTypes, enabledTypes, previousQuestions })
+        body: JSON.stringify(requestBody)
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'فشل التوليد');
@@ -232,58 +267,119 @@ export default function CreateExamFlow({ onCancel, onComplete }: { onCancel: () 
 
       {step === 1 && (
         <div className="space-y-4 max-w-2xl">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm text-slate-400 mb-1">عنوان الامتحان</label>
-              <input type="text" list="titles-list" value={title} onChange={e=>setTitle(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none" placeholder="اختبار الفصل الأول..." />
-              <datalist id="titles-list">
-                {uniqueTitles.map((t, i) => <option key={i} value={t} />)}
-              </datalist>
-            </div>
-            <div>
-              <label className="block text-sm text-slate-400 mb-1">المادة</label>
+              <label className="block text-sm text-slate-400 mb-1">اسم المادة *</label>
               <input type="text" list="subjects-list" value={subject} onChange={e=>setSubject(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none" placeholder="الرياضيات..." />
               <datalist id="subjects-list">
                 {uniqueSubjects.map((s, i) => <option key={i} value={s} />)}
               </datalist>
             </div>
             <div>
-              <label className="block text-sm text-slate-400 mb-1">تاريخ الامتحان</label>
-              <input type="date" value={examDate} onChange={e=>setExamDate(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none" />
+              <label className="block text-sm text-slate-400 mb-1">الصف الدراسي *</label>
+              <select value={grade} onChange={e=>setGrade(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none">
+                <option value="الصف الأول الابتدائي">الصف الأول الابتدائي</option>
+                <option value="الصف الثاني الابتدائي">الصف الثاني الابتدائي</option>
+                <option value="الصف الثالث الابتدائي">الصف الثالث الابتدائي</option>
+                <option value="الصف الرابع الابتدائي">الصف الرابع الابتدائي</option>
+                <option value="الصف الخامس الابتدائي">الصف الخامس الابتدائي</option>
+                <option value="الصف السادس الابتدائي">الصف السادس الابتدائي</option>
+                <option value="الأول متوسط">الأول متوسط</option>
+                <option value="الثاني متوسط">الثاني متوسط</option>
+                <option value="الثالث متوسط">الثالث متوسط</option>
+                <option value="الأول ثانوي">الأول ثانوي</option>
+                <option value="الثاني ثانوي">الثاني ثانوي</option>
+                <option value="الثالث ثانوي">الثالث ثانوي</option>
+              </select>
+            </div>
+            <div className="sm:col-span-2">
+              <label className="block text-sm text-slate-400 mb-1">عنوان الدرس أو الوحدة *</label>
+              <input type="text" value={topic} onChange={e=>setTopic(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none" placeholder="مثال: الخلية الحيوانية، المعادلات الخطية..." />
             </div>
             <div>
-              <label className="block text-sm text-slate-400 mb-1">الصف المستهدف</label>
+              <label className="block text-sm text-slate-400 mb-1">مستوى الصعوبة *</label>
+              <select value={difficulty} onChange={e=>setDifficulty(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none">
+                <option value="سهل">سهل</option>
+                <option value="متوسط">متوسط</option>
+                <option value="صعب">صعب</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm text-slate-400 mb-1">المهارة المستهدفة *</label>
+              <select value={learningObjective} onChange={e=>setLearningObjective(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none">
+                <option value="تذكر وحفظ">تذكر وحفظ</option>
+                <option value="فهم واستيعاب">فهم واستيعاب</option>
+                <option value="تطبيق وتحليل">تطبيق وتحليل</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm text-slate-400 mb-1">الصف المستهدف للربط *</label>
               <select value={classId} onChange={e=>setClassId(Number(e.target.value))} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none">
                 <option value={0}>اختر الصف...</option>
                 {classes.map(c => <option key={c.id} value={c.id}>{c.name} ({c.subject})</option>)}
               </select>
             </div>
+            <div>
+              <label className="block text-sm text-slate-400 mb-1">تاريخ الامتحان</label>
+              <input type="date" value={examDate} onChange={e=>setExamDate(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none" />
+            </div>
+            <div>
+              <label className="block text-sm text-slate-400 mb-1">عنوان الامتحان (للحفظ)</label>
+              <input type="text" list="titles-list" value={title} onChange={e=>setTitle(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none" placeholder="اختبار الفصل الأول..." />
+              <datalist id="titles-list">
+                {uniqueTitles.map((t, i) => <option key={i} value={t} />)}
+              </datalist>
+            </div>
           </div>
-          <div>
-            <label className="block text-sm text-slate-400 mb-1">المحتوى / المنهج (الصق النص)</label>
-            <textarea value={contentBlock} onChange={e=>setContentBlock(e.target.value)} rows={4} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none resize-none font-mono text-sm" placeholder="قم بلصق محتوى القراءة أو المنهج هنا..."></textarea>
-          </div>
-          
-          <div className="bg-slate-800 p-4 border border-slate-700 rounded-xl">
-             <label className="block text-sm text-slate-400 mb-2">أو ارفع صور / ملفات PDF</label>
-             <div className="flex flex-col gap-3">
-               <label className="flex items-center justify-center w-full bg-slate-900 border border-dashed border-slate-600 hover:border-blue-500 text-slate-300 rounded-xl p-6 cursor-pointer focus:outline-none transition-colors">
-                  <div className="flex items-center space-x-2 space-x-reverse">
-                    <UploadCloud size={24} /> <span>اختر صور أو ملفات PDF</span>
-                  </div>
-                  <input type="file" multiple accept="image/*, .pdf" className="hidden" onChange={handleFileUpload} />
-               </label>
-               {files.length > 0 && (
-                 <div className="flex flex-wrap gap-2">
-                   {files.map((file, idx) => (
-                     <div key={idx} className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1 flex items-center space-x-2 space-x-reverse text-sm">
-                       <span className="truncate max-w-[150px]">{file.name}</span>
-                       <button onClick={() => removeFile(idx)} className="text-red-400 hover:text-red-300"><X size={14} /></button>
+
+          <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700">
+            <h3 className="text-lg font-semibold mb-3 text-white">مصادر الامتحان</h3>
+            <div className="mb-4">
+              <label className="block text-sm text-slate-400 mb-1">نوع المصدر الأساسي</label>
+              <select value={sourceType} onChange={e=>setSourceType(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none">
+                <option value="text">نص مباشر / محادثات سابقة</option>
+                <option value="link">رابط موقع / مقال</option>
+                <option value="file">ملفات (PDF / صور)</option>
+              </select>
+            </div>
+
+            {sourceType === 'text' && (
+              <div>
+                <label className="block text-sm text-slate-400 mb-1">المحتوى / المنهج</label>
+                <textarea value={contentBlock} onChange={e=>setContentBlock(e.target.value)} rows={4} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none resize-none font-mono text-sm" placeholder="قم بلصق محتوى القراءة، المنهج، أو المحادثات السابقة هنا..."></textarea>
+              </div>
+            )}
+
+            {sourceType === 'link' && (
+              <div>
+                <label className="block text-sm text-slate-400 mb-1">رابط المصدر</label>
+                <input type="url" value={sourceLink} onChange={e=>setSourceLink(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none" placeholder="https://example.com/lesson" />
+              </div>
+            )}
+             
+            {(sourceType === 'file' || files.length > 0) && (
+              <div className="mt-4">
+                 <label className="block text-sm text-slate-400 mb-2">ارفع صور / ملفات PDF / التقاط من الكاميرا</label>
+                 <div className="flex flex-col gap-3">
+                   <label className="flex items-center justify-center w-full bg-slate-900 border border-dashed border-slate-600 hover:border-blue-500 text-slate-300 rounded-xl p-6 cursor-pointer focus:outline-none transition-colors">
+                      <div className="flex items-center space-x-2 space-x-reverse">
+                        <UploadCloud size={24} /> <span>اختر صور أو ملفات PDF أو التقط صورة</span>
+                      </div>
+                      <input type="file" multiple accept="image/*, .pdf, capture=camera" className="hidden" onChange={handleFileUpload} />
+                   </label>
+                   {files.length > 0 && (
+                     <div className="flex flex-wrap gap-2">
+                       {files.map((file, idx) => (
+                         <div key={idx} className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1 flex items-center space-x-2 space-x-reverse text-sm">
+                           <span className="truncate max-w-[150px]">{file.name}</span>
+                           <button onClick={() => removeFile(idx)} className="text-red-400 hover:text-red-300"><X size={14} /></button>
+                         </div>
+                       ))}
                      </div>
-                   ))}
+                   )}
                  </div>
-               )}
-             </div>
+              </div>
+            )}
           </div>
 
           <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700">
@@ -292,8 +388,13 @@ export default function CreateExamFlow({ onCancel, onComplete }: { onCancel: () 
             
             <div className="space-y-4">
               <div>
-                <label className="block text-sm text-slate-400 mb-2">إجمالي عدد الأسئلة</label>
-                <input type="number" min="1" value={totalQuestions} onChange={e=>setTotalQuestions(parseInt(e.target.value) || 1)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none" />
+                <label className="block text-sm text-slate-400 mb-2">إجمالي عدد الأسئلة *</label>
+                <select value={totalQuestions} onChange={e=>setTotalQuestions(parseInt(e.target.value) || 10)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none">
+                   <option value={5}>5 أسئلة</option>
+                   <option value={10}>10 أسئلة</option>
+                   <option value={15}>15 سؤال</option>
+                   <option value={20}>20 سؤال</option>
+                </select>
               </div>
               <div className="flex items-center gap-2 p-3 bg-slate-900 rounded-xl border border-slate-700">
                   <input 
@@ -389,32 +490,50 @@ export default function CreateExamFlow({ onCancel, onComplete }: { onCancel: () 
             <input type="text" value={notes} onChange={e=>setNotes(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none mb-3" placeholder="مثال: قم بإنشاء 10 أسئلة صعبة جداً..." />
             
             <div className="relative group">
+              <div className="flex items-center justify-between mb-2">
+                 <label className="block text-sm text-slate-400">اقتراحات الذكاء الاصطناعي للملاحظات (ديناميكية)</label>
+                 <button onClick={async (e) => {
+                    e.preventDefault();
+                    setIsFetchingSuggestions(true);
+                    try {
+                       const sugRes = await fetch('/api/suggestions', {
+                         method: 'POST',
+                         headers: { 'Content-Type': 'application/json' },
+                         body: JSON.stringify({ subject, grade, topic, difficulty })
+                       });
+                       if (sugRes.ok) {
+                          const data = await sugRes.json();
+                          if (data.suggestions) setAiSuggestions(data.suggestions);
+                       }
+                    } catch(e) {}
+                    setIsFetchingSuggestions(false);
+                 }} className="text-xs flex items-center gap-1 text-blue-400 hover:text-blue-300">
+                    <Sparkles size={14} /> تحديث الاقتراحات
+                 </button>
+              </div>
               <button 
                 onClick={(e) => { e.preventDefault(); suggScrollRef.current?.scrollBy({ left: -150, behavior: 'smooth' }); }}
-                className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 bg-slate-800 border border-slate-600 p-1 rounded-full z-10 hidden group-hover:block hover:bg-slate-700"
+                className="absolute right-0 top-1/2 translate-x-1/2 bg-slate-800 border border-slate-600 p-1 rounded-full z-10 hidden group-hover:block hover:bg-slate-700"
               ><ChevronRight size={16}/></button>
               <button 
                 onClick={(e) => { e.preventDefault(); suggScrollRef.current?.scrollBy({ left: 150, behavior: 'smooth' }); }}
-                className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 bg-slate-800 border border-slate-600 p-1 rounded-full z-10 hidden group-hover:block hover:bg-slate-700"
+                className="absolute left-0 top-1/2 -translate-x-1/2 bg-slate-800 border border-slate-600 p-1 rounded-full z-10 hidden group-hover:block hover:bg-slate-700"
               ><ChevronLeft size={16}/></button>
               
-              <div ref={suggScrollRef} className="flex overflow-x-auto gap-2 no-scrollbar scroll-smooth px-1">
-                {[
-                  "أنشئ 10 أسئلة اختيار من متعدد بمستوى متوسط",
-                  "امتحان قصير من 5 أسئلة مع التركيز على التعاريف",
-                  "اختبار شامل من 20 سؤال يغطي كل المواضيع",
-                  "أسئلة تحليلية صعبة للطلاب المتفوقين",
-                  "ركز على الفصول الثلاثة الأولى فقط",
-                  "تجنب الأسئلة التي تعتمد على الحفظ المباشر"
-                ].map((sug, i) => (
-                  <button 
-                    key={i} 
-                    onClick={() => setNotes(sug)}
-                    className="bg-slate-800 hover:bg-blue-900/40 text-blue-300 border border-slate-700 hover:border-blue-500/50 rounded-full px-4 py-1.5 text-xs transition-colors cursor-pointer whitespace-nowrap flex-shrink-0"
-                  >
-                    {sug}
-                  </button>
-                ))}
+              <div ref={suggScrollRef} className="flex overflow-x-auto gap-2 no-scrollbar scroll-smooth px-1 pb-2">
+                {isFetchingSuggestions ? (
+                   <span className="text-xs text-slate-500">جاري جلب الاقتراحات...</span>
+                ) : (
+                  aiSuggestions.map((sug, i) => (
+                    <button 
+                      key={i} 
+                      onClick={() => setNotes(prev => prev ? prev + '، ' + sug : sug)}
+                      className="bg-slate-800 hover:bg-blue-900/40 text-blue-300 border border-slate-700 hover:border-blue-500/50 rounded-full px-4 py-1.5 text-xs transition-colors cursor-pointer whitespace-nowrap flex-shrink-0"
+                    >
+                      {sug}
+                    </button>
+                  ))
+                )}
               </div>
             </div>
           </div>
@@ -448,7 +567,7 @@ export default function CreateExamFlow({ onCancel, onComplete }: { onCancel: () 
                    <span className="text-xs text-slate-400 bg-slate-900 px-2 py-1 rounded-md ml-2">{q.type}</span>
                    {q.text}
                  </div>
-                 {q.options && (
+                 {q.options && q.type === 'mcq' && (
                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                      {Object.entries(q.options).map(([key, val]) => (
                        <div key={key} className={`p-3 rounded-lg border flex items-center ${q.correctAnswer === key ? 'bg-emerald-900/30 border-emerald-700 text-emerald-200' : 'bg-slate-900 border-slate-700 text-slate-300'}`}>
@@ -458,10 +577,27 @@ export default function CreateExamFlow({ onCancel, onComplete }: { onCancel: () 
                      ))}
                    </div>
                  )}
-                 {q.type !== 'mcq' && (
+                 {q.type === 'matching' && q.matchingPairs && (
+                   <div className="mt-3 grid grid-cols-2 gap-2">
+                     {q.matchingPairs.map((pair: any, idx: number) => (
+                       <React.Fragment key={idx}>
+                         <div className="p-2 bg-slate-900 border border-slate-700 rounded-lg text-sm">{pair.left}</div>
+                         <div className="p-2 bg-slate-800 border border-slate-600 rounded-lg text-sm text-emerald-200 flex items-center gap-2"><ArrowLeft size={14}/> {pair.right}</div>
+                       </React.Fragment>
+                     ))}
+                   </div>
+                 )}
+                 {q.type === 'image_labeling' && (
+                   <div className="mt-3 p-3 bg-slate-900 rounded-lg border border-slate-700">
+                     <p className="text-sm text-slate-400 mb-2">وصف الصورة المطلوبة: <span className="text-slate-200">{q.imageDescription}</span></p>
+                     <span className="text-slate-400 text-sm ml-2">الإجابة الصحيحة:</span>
+                     <span className="font-bold text-emerald-400">{q.correctAnswer}</span>
+                   </div>
+                 )}
+                 {q.type !== 'mcq' && q.type !== 'matching' && q.type !== 'image_labeling' && (
                    <div className="mt-3 p-3 bg-slate-900 rounded-lg border border-slate-700">
                      <span className="text-slate-400 text-sm ml-2">الإجابة الصحيحة:</span>
-                     <span className="font-bold text-emerald-400">{q.correctAnswer || JSON.stringify(q.matchingPairs)}</span>
+                     <span className="font-bold text-emerald-400">{q.correctAnswer}</span>
                    </div>
                  )}
                </div>
