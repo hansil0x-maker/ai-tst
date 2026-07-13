@@ -16,13 +16,14 @@ export default function LiveExamDashboard() {
   const [showSessionOptions, setShowSessionOptions] = useState(false);
   const [saveStudentsPermanently, setSaveStudentsPermanently] = useState(true);
   
-  const [totalStudents, setTotalStudents] = useState<number>(30);
-  const [availableDevices, setAvailableDevices] = useState<number>(4);
-  const [sessionDuration, setSessionDuration] = useState<number>(30);
+  const [totalStudents, setTotalStudents] = useState<number | string>(30);
+  const [availableDevices, setAvailableDevices] = useState<number | string>(4);
+  const [sessionDuration, setSessionDuration] = useState<number | string>(30);
   const [currentBatchIndex, setCurrentBatchIndex] = useState<number>(0);
   const [selectedClassId, setSelectedClassId] = useState<number>(0);
   const [selectedExamId, setSelectedExamId] = useState<number>(0);
   const [absentStudentIds, setAbsentStudentIds] = useState<number[]>([]);
+  const [swapStudentModal, setSwapStudentModal] = useState<{otp: string, student: any} | null>(null);
   
   const [sessionOtps, setSessionOtps] = useState<Record<string, any>>({});
   const [quickMessage, setQuickMessage] = useState('');
@@ -135,6 +136,19 @@ export default function LiveExamDashboard() {
       return;
     }
     setShowSessionOptions(true);
+  };
+
+    const handleNumberChange = (setter: any, val: string) => {
+    if (val === '') {
+      setter('');
+    } else {
+      const num = parseInt(val);
+      if (isNaN(num)) return;
+      if (num > 200 || num < 1) {
+        toast.error('يرجى إدخال رقم منطقي', { id: 'num_warn' });
+      }
+      setter(num);
+    }
   };
 
   const handleCreateSessionDirect = () => {
@@ -523,18 +537,18 @@ export default function LiveExamDashboard() {
             <div className="grid grid-cols-2 gap-4 mb-4">
               <div>
                  <label className="block text-sm text-slate-300 mb-1">عدد الأجهزة المتاحة</label>
-                 <input type="number" min="1" value={availableDevices} onChange={e => setAvailableDevices(parseInt(e.target.value) || 1)} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white outline-none" />
+                 <input type="number" min="1" value={availableDevices} onChange={e => handleNumberChange(setAvailableDevices, e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white outline-none" />
               </div>
               <div>
                  <label className="block text-sm text-slate-300 mb-1">عدد الطلاب الإجمالي</label>
-                 <input type="number" min="1" value={totalStudents} onChange={e => setTotalStudents(parseInt(e.target.value) || 1)} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white outline-none" />
+                 <input type="number" min="1" value={totalStudents} onChange={e => handleNumberChange(setTotalStudents, e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white outline-none" />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4 mb-4">
               <div>
                  <label className="block text-sm text-slate-300 mb-1">مدة الجلسة الواحدة (دقائق)</label>
-                 <input type="number" min="1" value={sessionDuration} onChange={e => setSessionDuration(parseInt(e.target.value) || 1)} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white outline-none" />
+                 <input type="number" min="1" value={sessionDuration} onChange={e => handleNumberChange(setSessionDuration, e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white outline-none" />
               </div>
               <div>
                  <label className="block text-sm text-slate-300 mb-1">ملخص الجلسات</label>
@@ -606,7 +620,7 @@ export default function LiveExamDashboard() {
                    return (
                      <div key={otp} className={`p-4 rounded-xl flex justify-between items-center border ${isSubmitted ? 'border-purple-500 bg-purple-900/20' : isConnected ? 'border-emerald-500 bg-emerald-900/20' : 'border-slate-700 bg-slate-800'}`}>
                        <div>
-                         <p className="font-bold text-white mb-1">{st.name}</p>
+                         <button onClick={() => !isConnected && !isSubmitted && setSwapStudentModal({otp, student: st})} className={`font-bold text-white mb-1 text-right flex items-center gap-1 ${!isConnected && !isSubmitted ? "hover:text-blue-400 cursor-pointer" : "cursor-default"}`}>{st.name} {!isConnected && !isSubmitted && <span className="text-xs font-normal text-slate-500 bg-slate-800 px-1 rounded border border-slate-700">تغيير</span>}</button>
                          <p className="text-xs text-slate-400">{isSubmitted ? 'تم التسليم' : isConnected ? 'نشط الآن' : 'في الانتظار'}</p>
                        </div>
                        <div className="flex flex-col items-end gap-2">
@@ -823,6 +837,39 @@ export default function LiveExamDashboard() {
           </div>
         )}
       </div>
+
+      {swapStudentModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 w-full max-w-md rounded-2xl p-6 relative">
+            <h3 className="text-xl font-bold text-white mb-4">تبديل الطالب (مكان {swapStudentModal.student.name})</h3>
+            <p className="text-sm text-slate-400 mb-4">اختر طالباً آخر من القائمة لإضافته لهذه الجلسة:</p>
+            <div className="max-h-64 overflow-y-auto space-y-2 mb-4">
+               {allStudents?.filter(s => s.classId === selectedClassId && !Object.values(sessionOtps).some((st: any) => st.id === s.id) && !absentStudentIds.includes(s.id!) && !submissions.some(sub => sub.student.id === s.id)).length === 0 ? (
+                  <p className="text-slate-500 text-center py-4">لا يوجد طلاب متاحين للتبديل</p>
+               ) : (
+                 allStudents?.filter(s => s.classId === selectedClassId && !Object.values(sessionOtps).some((st: any) => st.id === s.id) && !absentStudentIds.includes(s.id!) && !submissions.some(sub => sub.student.id === s.id)).map(s => (
+                   <button 
+                     key={s.id}
+                     onClick={() => {
+                        setSessionOtps(prev => {
+                           const next = { ...prev };
+                           next[swapStudentModal.otp] = s;
+                           return next;
+                        });
+                        setSwapStudentModal(null);
+                        toast.success('تم تغيير الطالب بنجاح');
+                     }}
+                     className="w-full text-right p-3 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg text-white"
+                   >
+                     {s.name}
+                   </button>
+                 ))
+               )}
+            </div>
+            <button onClick={() => setSwapStudentModal(null)} className="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 rounded-xl transition-colors">إلغاء</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

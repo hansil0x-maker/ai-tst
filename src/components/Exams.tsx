@@ -7,7 +7,7 @@ import {
   FileText,
   Eye,
   Clock,
-  CheckCircle,
+  CheckCircle, BookOpen,
   X,
 } from "lucide-react";
 import CreateExamFlow from "./CreateExamFlow";
@@ -352,7 +352,7 @@ export default function Exams() {
                const examResults = results.filter(r => r.examId === viewExam.id);
                if (examResults.length > 0) {
                  return (
-                   <div className="mt-8 pt-6 border-t border-slate-700">
+                   <div id="exam-results-section" className="mt-8 pt-6 border-t border-slate-700">
                      <div className="flex justify-between items-center mb-4">
                        <h4 className="text-xl font-bold text-white">نتائج الطلاب ({examResults.length})</h4>
                        {examResults.some(r => r.needsGrading) && (

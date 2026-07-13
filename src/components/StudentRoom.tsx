@@ -366,7 +366,7 @@ export default function StudentRoom({ studentData, onExit }: { studentData: any,
                 {resultView.aiFeedback && (
                    <div className="bg-blue-900/20 p-5 rounded-2xl border border-blue-800/50 mb-6">
                       <h3 className="text-blue-400 font-bold mb-2 flex items-center gap-2"><CheckCircle2 size={18} /> تعليق المعلم الذكي</h3>
-                      <p className="text-blue-100 leading-relaxed text-lg">{resultView.aiFeedback}</p>
+                      <p className="text-blue-100 leading-relaxed text-xl leading-loose">{resultView.aiFeedback}</p>
                    </div>
                 )}
 
@@ -501,7 +501,7 @@ export default function StudentRoom({ studentData, onExit }: { studentData: any,
       <main className="flex-1 p-4 md:p-6 max-w-4xl mx-auto w-full pb-32">
         {currentQ && (
           <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800 animate-in fade-in slide-in-from-right-4 duration-300">
-            <h3 className="font-bold text-xl md:text-2xl mb-6 text-slate-800 dark:text-white leading-relaxed">
+            <h3 className="font-bold text-xl md:text-2xl mb-8 text-slate-800 dark:text-white leading-[1.8] border-b border-slate-200 dark:border-slate-800 pb-6">
                {currentPage + 1}. {currentQ.text}
             </h3>
             
@@ -578,7 +578,7 @@ export default function StudentRoom({ studentData, onExit }: { studentData: any,
 
             {(currentQ.type === 'short_answer' || currentQ.type === 'fill_blanks' || currentQ.type === 'short' || currentQ.type === 'fill') && (
                <textarea
-                 rows={4}
+                 rows={6}
                  value={answers[currentQ.id] || ''}
                  onChange={(e) => setAnswers(prev => ({...prev, [currentQ.id]: e.target.value}))}
                  placeholder="اكتب إجابتك هنا بوضوح..."
