@@ -404,7 +404,7 @@ export default function LiveExamDashboard() {
                 mistakes.push({
                    questionText: q.text,
                    studentAnswer: ans.studentAnswer,
-                   correctAnswer: q.options ? q.options.find((o: any) => o.isCorrect)?.text : q.correctAnswer,
+                   correctAnswer: q.options ? q.options[q.correctAnswer] || q.correctAnswer : q.correctAnswer,
                    explanation: ans.explanation || 'غير متطابق مع نموذج الإجابة'
                 });
              }
