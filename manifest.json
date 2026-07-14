@@ -1,23 +1,20 @@
 {
-  "name": "ai test",
-  "short_name": "ai test",
-  "start_url": "https://ai-tst-production.up.railway.app",
-  "display": "standalone",
-  "background_color": "#1e293b",
-  "theme_color": "#1e293b",
+  "name": "AI Tests",
+  "short_name": "AI Tests",
+  "description": "تطبيق الإختبارات الذكية",
+  "start_url": "/",
+  "display": "fullscreen",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "lang": "en",
+  "scope": "/",
   "orientation": "portrait",
   "icons": [
     {
-      "src": "icon.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "icon.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any"
+      "src": "icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
     }
   ]
 }
