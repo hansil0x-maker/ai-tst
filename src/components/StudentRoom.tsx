@@ -34,6 +34,55 @@ export default function StudentRoom({ studentData, onExit }: { studentData: any,
   const onExitRef = useRef(onExit);
   const answersRef = useRef(answers);
   const examRef = useRef(exam);
+  const wakeLockRef = useRef<any>(null);
+
+  useEffect(() => {
+    const blockEvent = (e: Event) => e.preventDefault();
+    window.addEventListener('contextmenu', blockEvent);
+    window.addEventListener('selectstart', blockEvent);
+    return () => {
+      window.removeEventListener('contextmenu', blockEvent);
+      window.removeEventListener('selectstart', blockEvent);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      window.history.pushState(null, '', window.location.href);
+    };
+
+    if (status === 'active') {
+      window.history.pushState(null, '', window.location.href);
+      window.addEventListener('popstate', handlePopState);
+    }
+
+    const manageWakeLock = async () => {
+      if (status === 'active' && 'wakeLock' in navigator) {
+        try {
+          // @ts-ignore
+          wakeLockRef.current = await navigator.wakeLock.request('screen');
+        } catch (err) {
+          console.warn('Wake Lock request failed:', err);
+        }
+      } else if (status !== 'active' && wakeLockRef.current) {
+        try {
+          await wakeLockRef.current.release();
+          wakeLockRef.current = null;
+        } catch (err) {
+          console.warn('Wake Lock release failed:', err);
+        }
+      }
+    };
+    manageWakeLock();
+    
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      if (wakeLockRef.current) {
+        wakeLockRef.current.release().catch(() => {});
+        wakeLockRef.current = null;
+      }
+    };
+  }, [status]);
   
   useEffect(() => {
     statusRef.current = status;
@@ -127,18 +176,8 @@ export default function StudentRoom({ studentData, onExit }: { studentData: any,
     });
 
     setSocket(newSocket);
-
-    const handleVisibilityChange = () => {
-      if (document.hidden && statusRef.current === 'active') {
-         toast.error('تحذير: لا تخرج من شاشة الامتحان!');
-         newSocket.emit('cheat_alert', { token: sessionTokenRef.current, student: fullStudentDataRef.current, reason: 'الطالب خرج من شاشة الامتحان (تبديل تطبيقات أو متصفح)' });
-      }
-    };
-    
-    document.addEventListener('visibilitychange', handleVisibilityChange);
     
     return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
       newSocket.disconnect();
       stopCamera();
     };

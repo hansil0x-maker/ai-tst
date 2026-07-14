@@ -21,7 +21,8 @@ export default defineConfig(() => {
           description: 'تطبيق الإختبارات الذكية',
           theme_color: '#0f172a',
           background_color: '#0f172a',
-          display: 'standalone',
+          display: 'fullscreen',
+          orientation: 'portrait',
           icons: [
             {
               src: 'icon.svg',
