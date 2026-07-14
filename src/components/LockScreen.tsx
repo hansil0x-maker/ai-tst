@@ -456,7 +456,7 @@ export default function LockScreen({
         )}
       </div>
       <div className="mt-8 text-slate-500 text-sm font-mono opacity-60">
-        التحديث رقم 5.6.6
+        التحديث رقم 6.6.6
       </div>
     </div>
   );
